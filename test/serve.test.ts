@@ -35,7 +35,8 @@ function getFreePort(): Promise<number> {
 function postJson(url: string, body: unknown, headers?: Record<string, string>): Promise<Response> {
   return fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
+    // MCP spec requires both content types in Accept header for POST requests.
+    headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream", ...headers },
     body: JSON.stringify(body),
   });
 }
@@ -68,13 +69,13 @@ describe("HTTP server — no authentication", () => {
     await close();
   });
 
-  test("accepts POST without Authorization header", async () => {
+  test("accepts POST without Authorization header (200)", async () => {
     const res = await postJson(baseUrl, INIT_PAYLOAD);
     await res.body?.cancel();
-    assert.notEqual(res.status, 401, "expected non-401 when no token is configured");
+    assert.equal(res.status, 200);
   });
 
-  test("accepts GET without Authorization header", async () => {
+  test("accepts GET without Authorization header (non-401)", async () => {
     const res = await fetch(baseUrl);
     await res.body?.cancel();
     assert.notEqual(res.status, 401);
@@ -137,12 +138,12 @@ describe("HTTP server — with authentication", () => {
     assert.equal(body.error, "Unauthorized");
   });
 
-  test("allows POST with correct Bearer token (non-401)", async () => {
+  test("allows POST with correct Bearer token (200)", async () => {
     const res = await postJson(baseUrl, INIT_PAYLOAD, {
       Authorization: `Bearer ${TOKEN}`,
     });
     await res.body?.cancel();
-    assert.notEqual(res.status, 401, "correct token should not be rejected");
+    assert.equal(res.status, 200);
   });
 
   test("allows GET with correct Bearer token (non-401)", async () => {
@@ -153,15 +154,6 @@ describe("HTTP server — with authentication", () => {
     assert.notEqual(res.status, 401);
   });
 
-  test("initialize with correct token reaches the transport (not 401)", async () => {
-    // The transport may return 200 or another status depending on its internal state,
-    // but it must not return 401 — that would mean auth blocked the request.
-    const res = await postJson(baseUrl, INIT_PAYLOAD, {
-      Authorization: `Bearer ${TOKEN}`,
-    });
-    await res.body?.cancel();
-    assert.notEqual(res.status, 401, "transport should have received the request (auth passed)");
-  });
 });
 
 // ── Startup behaviour ─────────────────────────────────────────────────────────

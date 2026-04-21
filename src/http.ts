@@ -68,21 +68,10 @@ export async function createHttpMcpServer(
       }
     }
 
-    // ── Body parsing (POST only) ───────────────────────────────────────────
-    let body: unknown;
-    if (req.method === "POST") {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string));
-      }
-      try {
-        body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-      } catch {
-        // Leave body undefined; the transport rejects malformed payloads.
-      }
-    }
-
-    await transport.handleRequest(req, res, body);
+    // Delegate to the MCP transport — it reads the body from the stream itself.
+    // Do NOT consume req body here; reading it first exhausts the stream and
+    // causes the transport's internal Hono adapter to receive an empty body (500).
+    await transport.handleRequest(req, res);
   });
 
   httpServer.on("connection", (socket: Socket) => {
