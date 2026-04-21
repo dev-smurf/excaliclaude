@@ -153,4 +153,22 @@ describe("CollabClient", () => {
   it("elementCount returns 0 when empty", () => {
     assert.equal(client.elementCount(), 0);
   });
+
+  it("does not attempt reconnect on intentional disconnect", () => {
+    (client as any)._connected = true;
+    (client as any)._roomId = "test";
+    (client as any)._roomKey = "test";
+    (client as any)._socket = { disconnect: () => {}, connected: true };
+    client.disconnect();
+    assert.equal((client as any)._reconnectTimer, null);
+    assert.equal((client as any)._intentionalDisconnect, true);
+  });
+
+  it("resets reconnect attempts on disconnect", () => {
+    (client as any)._reconnectAttempts = 3;
+    (client as any)._connected = true;
+    (client as any)._socket = { disconnect: () => {}, connected: true };
+    client.disconnect();
+    assert.equal((client as any)._reconnectAttempts, 0);
+  });
 });

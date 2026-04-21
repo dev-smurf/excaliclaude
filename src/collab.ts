@@ -22,6 +22,11 @@ export class CollabClient {
   _elements: Map<string, ExcalidrawElement> = new Map();
   private _connected = false;
   private _history: string[][] = [];
+  private _intentionalDisconnect = false;
+  private _reconnectAttempts = 0;
+  private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 5;
+  private static readonly BASE_RECONNECT_DELAY_MS = 1000;
 
   isConnected(): boolean {
     return this._connected && this._socket?.connected === true;
@@ -32,6 +37,8 @@ export class CollabClient {
       this.disconnect();
     }
 
+    this._intentionalDisconnect = false;
+    this._reconnectAttempts = 0;
     this._roomId = roomId;
     this._roomKey = roomKey;
     this._elements.clear();
@@ -103,16 +110,25 @@ export class CollabClient {
 
       this._socket.on("disconnect", () => {
         this._connected = false;
+        if (!this._intentionalDisconnect) {
+          this._attemptReconnect();
+        }
       });
     });
   }
 
   disconnect(): void {
+    this._intentionalDisconnect = true;
+    if (this._reconnectTimer) {
+      clearTimeout(this._reconnectTimer);
+      this._reconnectTimer = null;
+    }
     if (this._socket) {
       this._socket.disconnect();
       this._socket = null;
     }
     this._connected = false;
+    this._reconnectAttempts = 0;
     clearKeyCache();
     this._roomId = null;
     this._roomKey = null;
@@ -208,6 +224,39 @@ export class CollabClient {
     }
 
     await this.deleteElements(allIds);
+  }
+
+  private _attemptReconnect(): void {
+    if (
+      this._reconnectAttempts >= CollabClient.MAX_RECONNECT_ATTEMPTS ||
+      !this._roomId ||
+      !this._roomKey
+    ) {
+      return;
+    }
+
+    const delay =
+      CollabClient.BASE_RECONNECT_DELAY_MS *
+      Math.pow(2, this._reconnectAttempts);
+    this._reconnectAttempts++;
+
+    this._reconnectTimer = setTimeout(() => {
+      if (this._intentionalDisconnect || !this._roomId || !this._roomKey) {
+        return;
+      }
+      const roomId = this._roomId;
+      const roomKey = this._roomKey;
+      // Clean up old socket without marking as intentional
+      if (this._socket) {
+        this._socket.disconnect();
+        this._socket = null;
+      }
+      this.connect(roomId, roomKey).catch(() => {
+        // Reconnect failed — next attempt will be triggered by the
+        // disconnect event handler if the socket connects then drops again.
+        // If connect() itself throws before establishing, we stop here.
+      });
+    }, delay);
   }
 
   private _assertConnected(): void {
