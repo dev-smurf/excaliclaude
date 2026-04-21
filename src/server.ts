@@ -1,3 +1,5 @@
+import crypto from "node:crypto";
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
@@ -419,6 +421,62 @@ LAYOUT RULES (CRITICAL — follow these every time):
             {
               type: "text" as const,
               text: `Clear failed: ${(err as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
+    "group_elements",
+    {
+      title: "Group Excalidraw elements",
+      description:
+        "Group elements together so they move as a unit in Excalidraw. Takes a list of element IDs and assigns them a shared group ID.",
+      inputSchema: {
+        ids: z
+          .array(z.string())
+          .min(2)
+          .describe("Element IDs to group together (minimum 2)"),
+      },
+    },
+    async ({ ids }: { ids: string[] }) => {
+      try {
+        const groupId = crypto.randomUUID();
+        const updatedElements: ExcalidrawElement[] = [];
+        let notFound = 0;
+
+        for (const id of ids) {
+          const existing = client.getElementById(id);
+          if (!existing) {
+            notFound++;
+            continue;
+          }
+          updatedElements.push({
+            ...existing,
+            groupIds: [...(existing.groupIds || []), groupId],
+            version: existing.version + 1,
+            versionNonce: Math.floor(Math.random() * 2147483646),
+            updated: Date.now(),
+          } as ExcalidrawElement);
+        }
+
+        if (updatedElements.length > 0) {
+          await client.pushElements(updatedElements);
+        }
+
+        const msg =
+          `Grouped ${updatedElements.length} elements.` +
+          (notFound > 0 ? ` ${notFound} not found.` : "");
+        return { content: [{ type: "text" as const, text: msg }] };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Group failed: ${(err as Error).message}`,
             },
           ],
           isError: true,

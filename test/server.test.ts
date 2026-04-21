@@ -431,6 +431,41 @@ describe("label centering in shapes", () => {
   });
 });
 
+describe("group_elements handler", () => {
+  it("assigns shared groupId to elements", async () => {
+    const { server, client } = createServer();
+    mockConnected(client);
+    const draw = (server as any)._registeredTools.draw_elements;
+    await draw.handler({
+      elements: [
+        { type: "rectangle", x: 0, y: 0, width: 50, height: 50 },
+        { type: "rectangle", x: 100, y: 0, width: 50, height: 50 },
+      ],
+    });
+    const ids = Array.from(client._elements.keys()).filter((id) => {
+      const el = client._elements.get(id);
+      return el?.type === "rectangle";
+    });
+
+    const group = (server as any)._registeredTools.group_elements;
+    const result = await group.handler({ ids });
+    assert.ok(result.content[0].text.includes("Grouped 2"));
+
+    const el1 = client._elements.get(ids[0]!)!;
+    const el2 = client._elements.get(ids[1]!)!;
+    assert.ok(el1.groupIds.length > 0);
+    assert.equal(el1.groupIds[el1.groupIds.length - 1], el2.groupIds[el2.groupIds.length - 1]);
+  });
+
+  it("reports not-found IDs", async () => {
+    const { server, client } = createServer();
+    mockConnected(client);
+    const group = (server as any)._registeredTools.group_elements;
+    const result = await group.handler({ ids: ["a", "b"] });
+    assert.ok(result.content[0].text.includes("2 not found"));
+  });
+});
+
 describe("undo_last_draw handler", () => {
   it("undoes the last draw", async () => {
     const { server, client } = createServer();
