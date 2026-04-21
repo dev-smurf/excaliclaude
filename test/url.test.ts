@@ -6,10 +6,10 @@ import { parseCollabUrl } from "../src/url.js";
 describe("parseCollabUrl", () => {
   it("parses a valid collab URL", () => {
     const url =
-      "https://excalidraw.com/#room=2d29daaec7bcd385353b,0p4wwhQCljrUc-33Qqql2w";
+      "https://excalidraw.com/#room=aabbccddeeff00112233,AAAAAAAAAAAAAAAAAAAAAA";
     const result = parseCollabUrl(url);
-    assert.equal(result.roomId, "2d29daaec7bcd385353b");
-    assert.equal(result.roomKey, "0p4wwhQCljrUc-33Qqql2w");
+    assert.equal(result.roomId, "aabbccddeeff00112233");
+    assert.equal(result.roomKey, "AAAAAAAAAAAAAAAAAAAAAA");
   });
 
   it("parses URL with extra path segments", () => {
@@ -39,7 +39,7 @@ describe("parseCollabUrl", () => {
     assert.throws(
       () =>
         parseCollabUrl(
-          "https://excalidraw.com/#room=abc,0p4wwhQCljrUc-33Qqql2w"
+          "https://excalidraw.com/#room=abc,AAAAAAAAAAAAAAAAAAAAAA"
         ),
       /too short/
     );
@@ -59,7 +59,7 @@ describe("parseCollabUrl", () => {
     assert.throws(
       () =>
         parseCollabUrl(
-          "https://excalidraw.com/#room=ZZZZZZZZZZZZZZZZZZZZ,0p4wwhQCljrUc-33Qqql2w"
+          "https://excalidraw.com/#room=ZZZZZZZZZZZZZZZZZZZZ,AAAAAAAAAAAAAAAAAAAAAA"
         ),
       /Invalid/
     );
@@ -69,7 +69,7 @@ describe("parseCollabUrl", () => {
     assert.throws(
       () =>
         parseCollabUrl(
-          "https://excalidraw.com/#room=abcdef123,0p4wwhQCljrUc-33Qqql2w"
+          "https://excalidraw.com/#room=abcdef123,AAAAAAAAAAAAAAAAAAAAAA"
         ),
       /too short/
     );
@@ -77,7 +77,7 @@ describe("parseCollabUrl", () => {
 
   it("accepts room ID of exactly 10 characters", () => {
     const result = parseCollabUrl(
-      "https://excalidraw.com/#room=abcdef1234,0p4wwhQCljrUc-33Qqql2w"
+      "https://excalidraw.com/#room=abcdef1234,AAAAAAAAAAAAAAAAAAAAAA"
     );
     assert.equal(result.roomId, "abcdef1234");
   });
