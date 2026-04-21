@@ -16,108 +16,7 @@ import { makeElement } from "./elements.js";
 import { parseCollabUrl } from "./url.js";
 import { buildShapeLabel, buildArrowLabel } from "./labels.js";
 import type { LabelProps } from "./labels.js";
-import type { ExcalidrawElement, LinearElement, TextElement } from "./types.js";
-
-// ── Spatial helpers ────────────────────────────────────────────────────────
-
-interface BBox {
-  id: string;
-  type: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  text?: string;
-}
-
-/** Build a bounding box list from visible elements, skipping bound labels and arrows/lines. */
-function collectBBoxes(elements: ExcalidrawElement[]): BBox[] {
-  return elements
-    .filter((el) => {
-      // Skip bound text labels (they intentionally overlap their container)
-      if (el.type === "text" && (el as TextElement).containerId) return false;
-      // Skip arrows and lines (they naturally cross over shapes)
-      if (el.type === "arrow" || el.type === "line") return false;
-      // Skip zero-size elements
-      if (el.width === 0 && el.height === 0) return false;
-      return true;
-    })
-    .map((el) => ({
-      id: el.id,
-      type: el.type,
-      x: el.x,
-      y: el.y,
-      w: el.width,
-      h: el.height,
-      text: (el as TextElement).text,
-    }));
-}
-
-/** Axis-aligned bounding box intersection test with a small tolerance. */
-function boxesOverlap(a: BBox, b: BBox, tolerance = 4): boolean {
-  return (
-    a.x < b.x + b.w - tolerance &&
-    a.x + a.w > b.x + tolerance &&
-    a.y < b.y + b.h - tolerance &&
-    a.y + a.h > b.y + tolerance
-  );
-}
-
-interface OverlapPair {
-  a: string; // id or short label
-  b: string;
-}
-
-/** Find all overlapping element pairs from a set of bounding boxes. */
-function findOverlaps(boxes: BBox[]): OverlapPair[] {
-  const overlaps: OverlapPair[] = [];
-  for (let i = 0; i < boxes.length; i++) {
-    for (let j = i + 1; j < boxes.length; j++) {
-      if (boxesOverlap(boxes[i]!, boxes[j]!)) {
-        const label = (b: BBox) => {
-          if (b.text) return `${b.type} "${b.text.slice(0, 15)}"`;
-          return `${b.type} (${b.id.slice(0, 8)})`;
-        };
-        overlaps.push({ a: label(boxes[i]!), b: label(boxes[j]!) });
-      }
-    }
-  }
-  return overlaps;
-}
-
-/** Compute canvas bounds and overlap warnings for all visible elements. */
-function buildSpatialSummary(elements: ExcalidrawElement[]): string {
-  if (elements.length === 0) return "";
-
-  const boxes = collectBBoxes(elements);
-  const parts: string[] = [];
-
-  // Canvas bounds
-  if (boxes.length > 0) {
-    const minX = Math.min(...boxes.map((b) => b.x));
-    const minY = Math.min(...boxes.map((b) => b.y));
-    const maxX = Math.max(...boxes.map((b) => b.x + b.w));
-    const maxY = Math.max(...boxes.map((b) => b.y + b.h));
-    parts.push(`Canvas bounds: (${Math.round(minX)}, ${Math.round(minY)}) to (${Math.round(maxX)}, ${Math.round(maxY)})`);
-  }
-
-  // Overlap warnings
-  const overlaps = findOverlaps(boxes);
-  if (overlaps.length > 0) {
-    const lines = overlaps.slice(0, 10).map((o) => `  - ${o.a} overlaps ${o.b}`);
-    parts.push(`OVERLAPS DETECTED (${overlaps.length}):\n${lines.join("\n")}`);
-  }
-
-  // Unbound arrows
-  const arrows = elements.filter((el): el is LinearElement =>
-    el.type === "arrow" && !(el as LinearElement).startBinding && !(el as LinearElement).endBinding
-  );
-  if (arrows.length > 0) {
-    parts.push(`UNBOUND ARROWS (${arrows.length}): ${arrows.map((a) => a.id.slice(0, 8)).join(", ")} — these arrows are not connected to any shape. Use startBinding/endBinding to attach them.`);
-  }
-
-  return parts.join("\n");
-}
+import type { ExcalidrawElement, TextElement } from "./types.js";
 
 /**
  * Creates the MCP server and its backing CollabClient. Caller owns transport setup.
@@ -200,32 +99,34 @@ export function createServer(existingClient?: CollabClient): { server: McpServer
       title: "Draw on Excalidraw",
       description: `Draw elements on the connected Excalidraw canvas. Supports rectangle, ellipse, diamond, text, arrow, line, frame, image.
 
-BINDINGS (connect arrows to shapes):
-- Set startBinding/endBinding on arrows with { elementId, fixedPoint }.
-- fixedPoint is [x, y] normalized 0-1 on the target shape: [0.5, 0] = top center, [0.5, 1] = bottom center, [0, 0.5] = left center, [1, 0.5] = right center.
-- The target shape MUST exist (already on canvas or drawn in the same call with a pre-assigned id).
+LAYOUT RULES (CRITICAL — follow these every time):
 
-PRE-ASSIGNED IDs:
-- Set "id" on any element to choose its ID. Then reference that ID in arrow bindings within the same call.
-- Example: draw a rectangle with id:"box1", then an arrow with endBinding: { elementId:"box1", fixedPoint:[0.5,0] }.
+1. PLAN BEFORE DRAWING: Before calling this tool, mentally map out the full layout. Calculate positions for every element, annotation, and arrow FIRST. Never place elements without considering the full picture.
 
-ELBOWED ARROWS (auto-routed right-angle paths):
-- Set elbowed: true on arrows. Excalidraw auto-routes them with 90° turns around obstacles.
-- Elbowed arrows REQUIRE at least one binding (startBinding or endBinding). Without a binding they render as straight lines.
-- When using elbowed arrows, set points to just [[0,0], [dx,dy]] (start and end). Excalidraw computes the intermediate waypoints.
+2. SPACING: Leave at least 80px horizontal gap between shapes for arrows + labels. Leave at least 120px vertical gap between rows for annotations. Annotations go BELOW their screen in a dedicated zone — never in the arrow corridor.
 
-WORKFLOW (follow every time):
-1. CALL get_scene FIRST to see all current elements, their positions, and any existing overlaps.
-2. PLAN THE FULL LAYOUT before drawing anything. Calculate x, y, width, height for every element. Account for text length — longer text needs wider/taller boxes.
-3. CHECK FOR COLLISIONS: For each new element, verify its bounding box (x, y, x+width, y+height) does not intersect any existing element.
-4. IF RESIZING: When a box grows, shift all elements to its right/below to maintain spacing. Never resize in isolation.
-5. DRAW EVERYTHING IN ONE CALL: Shapes + arrows + labels together, using pre-assigned IDs for bindings.
+3. ARROWS MUST NEVER OVERLAP CONTENT: Before drawing any arrow, check what elements exist between the start and end points. If anything is in the path, route the arrow around it using multi-point paths with 90-degree turns: points: [[0,0], [dx,0], [dx,dy]] for L-shapes, or [[0,0], [dx,0], [dx,dy], [dx2,dy]] for Z-shapes. Use as many segments as needed.
 
-SPACING: At least 80px horizontal gap between shapes, 120px vertical gap between rows.
-TEXT: Server estimates dimensions. Keep text concise. Multi-line uses \\n. Use textAlign: "center" for centered text.
-DARK CONTAINERS: Server auto-detects dark backgrounds and uses white text for labels.
+4. LABELS ON ARROWS: Arrow labels are standalone text (not bound). Place them adjacent to the arrow in empty space — above for horizontal arrows, beside for vertical arrows. Never on top of the arrow line or other content.
 
-The response includes overlap warnings and unbound arrow alerts — fix any issues before proceeding.`,
+5. TEXT IN DARK CONTAINERS: The server auto-detects dark backgrounds and sets white text. But verify visually — if backgroundColor is dark and fillStyle is "solid", the label will be white.
+
+6. USE get_scene FIRST: When adding to an existing canvas, ALWAYS call get_scene first to see current element positions. Then calculate new positions that avoid all existing content.
+
+7. RESPONSIVE ROUTING: If the best path for an arrow would overlap content, consider: (a) routing the arrow with extra waypoints, (b) repositioning the annotation text, or (c) adding more spacing. Choose whichever produces the cleanest result.
+
+8. TEXT DIMENSIONS: Text elements need width/height for proper rendering. The server estimates these, but keep text concise. Multi-line text uses \\n.
+
+9. STANDALONE TEXT NEAR ARROWS: When placing text elements near arrows manually (not using the label property), position them at least 10px ABOVE horizontal arrows or 12px to the RIGHT of vertical arrows. Never at the same y-coordinate as a horizontal arrow or the same x-coordinate as a vertical arrow — the text will visually overlap the arrow line.
+
+10. NO ELEMENT OVERLAP EVER: Before placing ANY element, verify its bounding box (x, y, width, height) does not intersect with any existing element. If it would overlap, move it to clear space. This applies to text, shapes, arrows — everything.
+
+11. CENTER TEXT PROPERLY: For annotation text below shapes (titles, descriptions), ALWAYS use textAlign: "center" and set width equal to the shape's width and x equal to the shape's x. This ensures Excalidraw centers the text visually regardless of width estimation. For standalone text inside phone mockups or UI elements, also use textAlign: "center". Never rely on manual x-offset calculations for centering — use textAlign instead.
+
+ARROW BINDINGS (optional — for connecting arrows to shapes):
+- Set "id" on shapes, then reference that id in arrow startBinding/endBinding within the same call.
+- fixedPoint: [0.5, 0]=top, [0.5, 1]=bottom, [0, 0.5]=left, [1, 0.5]=right.
+- Set elbowed: true for auto-routed right-angle arrows (requires at least one binding).`,
       inputSchema: {
         elements: z
           .array(
@@ -356,16 +257,11 @@ The response includes overlap warnings and unbound arrow alerts — fix any issu
           })
           .join(", ");
 
-        // Post-draw spatial check across ALL canvas elements
-        const spatial = buildSpatialSummary(client.getElements());
-        const response = `Drew ${builtElements.length} elements: ${summary}` +
-          (spatial ? `\n\n${spatial}` : "");
-
         return {
           content: [
             {
               type: "text" as const,
-              text: response,
+              text: `Drew ${builtElements.length} elements: ${summary}`,
             },
           ],
         };
@@ -388,7 +284,7 @@ The response includes overlap warnings and unbound arrow alerts — fix any issu
     {
       title: "Get Excalidraw scene",
       description:
-        "Get all non-deleted elements on the canvas. ALWAYS call this BEFORE draw_elements or update_elements to understand the current layout.\n\nCompact view (default) returns: id, type, x, y, width, height, text, boundElements, plus a spatial summary with canvas bounds, overlap warnings, and unbound arrows. Use this data to plan element placement and avoid collisions.\n\nSet full=true for all properties including strokeColor, backgroundColor, fillStyle, points, bindings, etc.",
+        "Get all non-deleted elements on the canvas. By default returns compact view (id, type, x, y, width, height, text, boundElements). Set full=true to get all properties including strokeColor, backgroundColor, fillStyle, points, etc. Call this BEFORE draw_elements or update_elements when adding to an existing canvas.",
       inputSchema: {
         full: z
           .boolean()
@@ -424,15 +320,11 @@ The response includes overlap warnings and unbound arrow alerts — fix any issu
           ? { count: elements.length, elements }
           : { count: elements.length, elements: compactElements };
 
-        const spatial = full ? "" : buildSpatialSummary(elements);
-        const response = JSON.stringify(data, null, 2) +
-          (spatial ? `\n\n${spatial}` : "");
-
         return {
           content: [
             {
               type: "text" as const,
-              text: response,
+              text: JSON.stringify(data, null, 2),
             },
           ],
         };
@@ -455,7 +347,7 @@ The response includes overlap warnings and unbound arrow alerts — fix any issu
     {
       title: "Update Excalidraw elements",
       description:
-        "Update existing elements on the canvas by ID. Use this to move, resize, restyle, or change text of existing elements instead of deleting and recreating them. Only provide the properties you want to change — all other properties are preserved.\n\nIMPORTANT: When resizing or moving an element, check if adjacent elements or bound arrows need to move too. Use get_scene first to see the full layout, then cascade changes to maintain proper spacing and avoid overlaps.\n\nPrefer update_elements over delete + draw: deleting and redrawing creates new IDs and severs arrow bindings.",
+        "Update existing elements on the canvas by ID. Use this to move, resize, restyle, or change text of existing elements instead of deleting and recreating them. Only provide the properties you want to change — all other properties are preserved. Prefer update_elements over delete + draw: deleting and redrawing creates new IDs and severs any arrow bindings to the element. Call get_scene first to obtain element IDs.",
       inputSchema: {
         updates: z
           .array(
@@ -528,11 +420,9 @@ The response includes overlap warnings and unbound arrow alerts — fix any issu
           await client.pushElements(updatedElements);
         }
 
-        const spatial = buildSpatialSummary(client.getElements());
         const msg =
           `Updated ${updatedElements.length} elements.` +
-          (notFound > 0 ? ` ${notFound} not found.` : "") +
-          (spatial ? `\n\n${spatial}` : "");
+          (notFound > 0 ? ` ${notFound} not found.` : "");
 
         return { content: [{ type: "text" as const, text: msg }] };
       } catch (err) {

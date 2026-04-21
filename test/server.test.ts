@@ -5,25 +5,6 @@ import { createServer } from "../src/server.js";
 import type { CollabClient } from "../src/collab.js";
 import type { ExcalidrawElement, TextElement } from "../src/types.js";
 
-/** Extract JSON from response text that may have a spatial summary appended after the JSON. */
-function parseSceneJson(text: string): Record<string, unknown> {
-  // The response is JSON followed by optional plain-text spatial summary.
-  // Find where the top-level JSON object ends by tracking brace depth.
-  let depth = 0;
-  let inString = false;
-  let escape = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (escape) { escape = false; continue; }
-    if (ch === "\\") { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
-    if (inString) continue;
-    if (ch === "{") depth++;
-    if (ch === "}") { depth--; if (depth === 0) return JSON.parse(text.slice(0, i + 1)); }
-  }
-  return JSON.parse(text);
-}
-
 function mockConnected(client: CollabClient): void {
   (client as any)._connected = true;
   (client as any)._socket = { connected: true, emit: () => {} };
@@ -118,12 +99,12 @@ describe("get_scene handler", () => {
     } as unknown as ExcalidrawElement);
     const handler = (server as any)._registeredTools.get_scene;
     const result = await handler.handler({});
-    const data = parseSceneJson(result.content[0].text);
+    const data = JSON.parse(result.content[0].text);
     assert.equal(data.count, 1);
-    assert.equal((data.elements as any[])[0].id, "t1");
-    assert.equal((data.elements as any[])[0].type, "text");
-    assert.equal((data.elements as any[])[0].text, "Hello");
-    assert.equal((data.elements as any[])[0].x, 10);
+    assert.equal(data.elements[0].id, "t1");
+    assert.equal(data.elements[0].type, "text");
+    assert.equal(data.elements[0].text, "Hello");
+    assert.equal(data.elements[0].x, 10);
   });
 
   it("excludes deleted elements", async () => {
@@ -148,9 +129,9 @@ describe("get_scene handler", () => {
     } as unknown as ExcalidrawElement);
     const handler = (server as any)._registeredTools.get_scene;
     const result = await handler.handler({});
-    const data = parseSceneJson(result.content[0].text);
+    const data = JSON.parse(result.content[0].text);
     assert.equal(data.count, 1);
-    assert.equal((data.elements as any[])[0].id, "a");
+    assert.equal(data.elements[0].id, "a");
   });
 
   it("returns full element data when full=true", async () => {
@@ -189,9 +170,9 @@ describe("get_scene handler", () => {
     } as unknown as ExcalidrawElement);
     const handler = (server as any)._registeredTools.get_scene;
     const result = await handler.handler({ full: false });
-    const data = parseSceneJson(result.content[0].text);
-    assert.equal((data.elements as any[])[0].strokeColor, undefined);
-    assert.equal((data.elements as any[])[0].id, "r1");
+    const data = JSON.parse(result.content[0].text);
+    assert.equal(data.elements[0].strokeColor, undefined);
+    assert.equal(data.elements[0].id, "r1");
   });
 });
 
