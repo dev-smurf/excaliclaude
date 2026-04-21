@@ -86,4 +86,48 @@ describe("CollabClient", () => {
   it("disconnect is safe to call when already disconnected", () => {
     assert.doesNotThrow(() => client.disconnect());
   });
+
+  it("getElements excludes deleted elements", () => {
+    client._elements.set("alive", { id: "alive", isDeleted: false });
+    client._elements.set("dead", { id: "dead", isDeleted: true });
+    const result = client.getElements();
+    assert.equal(result.length, 1);
+    assert.equal(result[0].id, "alive");
+  });
+
+  it("deleteElements silently skips IDs that do not exist", async () => {
+    client._connected = true;
+    client._socket = { connected: true, emit: () => {} };
+    client._roomKey = "dummy";
+    client._roomId = "dummy";
+    await assert.doesNotReject(() => client.deleteElements(["nonexistent"]));
+  });
+
+  it("clearAll does nothing when there are no elements", async () => {
+    client._connected = true;
+    client._socket = { connected: true, emit: () => {} };
+    client._roomKey = "dummy";
+    client._roomId = "dummy";
+    await assert.doesNotReject(() => client.clearAll());
+  });
+
+  it("pushElements rejects a non-array argument", async () => {
+    client._connected = true;
+    client._socket = { connected: true, emit: () => {} };
+    client._roomKey = "dummy";
+    client._roomId = "dummy";
+    await assert.rejects(() => client.pushElements("not-an-array"), /non-empty array/);
+  });
+
+  it("isConnected returns false when socket.connected is false", () => {
+    client._connected = true;
+    client._socket = { connected: false };
+    assert.equal(client.isConnected(), false);
+  });
+
+  it("isConnected returns false when socket is null", () => {
+    client._connected = true;
+    client._socket = null;
+    assert.equal(client.isConnected(), false);
+  });
 });

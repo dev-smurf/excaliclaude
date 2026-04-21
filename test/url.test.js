@@ -69,4 +69,21 @@ describe("parseCollabUrl", () => {
       /Invalid/
     );
   });
+
+  it("throws when room ID is exactly 9 characters", () => {
+    assert.throws(
+      () =>
+        parseCollabUrl(
+          "https://excalidraw.com/#room=abcdef123,0p4wwhQCljrUc-33Qqql2w"
+        ),
+      /too short/
+    );
+  });
+
+  it("accepts room ID of exactly 10 characters", () => {
+    const result = parseCollabUrl(
+      "https://excalidraw.com/#room=abcdef1234,0p4wwhQCljrUc-33Qqql2w"
+    );
+    assert.equal(result.roomId, "abcdef1234");
+  });
 });

@@ -84,7 +84,12 @@ function makeElement(type, props) {
       ...base,
       points: props.points || [[0, 0]],
       startArrowhead: props.startArrowhead || null,
-      endArrowhead: type === "arrow" ? (props.endArrowhead ?? "arrow") : null,
+      endArrowhead:
+        type === "arrow"
+          ? "endArrowhead" in props
+            ? props.endArrowhead
+            : "arrow"
+          : null,
       startBinding: props.startBinding || null,
       endBinding: props.endBinding || null,
       elbowed: props.elbowed || false,

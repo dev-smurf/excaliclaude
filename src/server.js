@@ -17,7 +17,7 @@ function createServer() {
     {
       title: "Connect to Excalidraw",
       description:
-        "Connect to an Excalidraw collaboration room. Get the link by clicking 'Live collaboration' in Excalidraw.",
+        "Connect to an Excalidraw collaboration room. If already connected to another room, the existing connection is closed first. Get the link by clicking 'Live collaboration' in Excalidraw. Must be called before any other tool.",
       inputSchema: {
         url: z
           .string()
@@ -155,13 +155,14 @@ LAYOUT RULES (CRITICAL — follow these every time):
             const labelWidth = Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
             const labelHeight = Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
 
-            // Auto white text on dark backgrounds
+            // Auto white text on dark backgrounds (perceptual luminance)
             const bg = built.backgroundColor || "transparent";
             const isDarkBg = (() => {
               if (bg === "transparent" || built.fillStyle !== "solid") return false;
-              const m = bg.match(/^#([0-9a-f]{2})/i);
+              const m = bg.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
               if (!m) return false;
-              return parseInt(m[1], 16) < 100;
+              const [r, g, b] = [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+              return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
             })();
             const labelColor = isDarkBg ? "#ffffff" : "#1e1e1e";
 
@@ -252,7 +253,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
     "get_scene",
     {
       title: "Get Excalidraw scene",
-      description: "Get all visible elements currently on the canvas.",
+      description: "Get all non-deleted elements on the canvas. Returns JSON with 'count' (integer) and 'elements' (array of {id, type, x, y, width, height, text}). Call this BEFORE draw_elements or update_elements when adding to an existing canvas — you need current positions and IDs to avoid overlaps and to target updates.",
       inputSchema: {},
     },
     async () => {
@@ -295,7 +296,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
     {
       title: "Update Excalidraw elements",
       description:
-        "Update existing elements on the canvas by ID. Use this to move, resize, restyle, or change text of existing elements instead of deleting and recreating them. Only provide the properties you want to change — all other properties are preserved from the original element.",
+        "Update existing elements on the canvas by ID. Use this to move, resize, restyle, or change text of existing elements instead of deleting and recreating them. Only provide the properties you want to change — all other properties are preserved. Prefer update_elements over delete + draw: deleting and redrawing creates new IDs and severs any arrow bindings to the element. Call get_scene first to obtain element IDs.",
       inputSchema: {
         updates: z
           .array(
@@ -375,7 +376,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
     "delete_elements",
     {
       title: "Delete Excalidraw elements",
-      description: "Delete elements from the canvas by their IDs.",
+      description: "Delete elements from the canvas by their IDs. IDs not found in the current scene are silently ignored. Call get_scene first to get current element IDs.",
       inputSchema: {
         ids: z
           .array(z.string())
@@ -385,10 +386,13 @@ LAYOUT RULES (CRITICAL — follow these every time):
     },
     async ({ ids }) => {
       try {
+        const before = client.getElements().length;
         await client.deleteElements(ids);
+        const after = client.getElements().length;
+        const actuallyDeleted = before - after;
         return {
           content: [
-            { type: "text", text: `Deleted ${ids.length} elements.` },
+            { type: "text", text: `Deleted ${actuallyDeleted} of ${ids.length} elements.` },
           ],
         };
       } catch (err) {
@@ -404,7 +408,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
     "clear_canvas",
     {
       title: "Clear Excalidraw canvas",
-      description: "Remove all elements from the canvas.",
+      description: "Remove ALL elements from the canvas permanently. Cannot be undone. The canvas will be empty for all collaborators. Use delete_elements for selective removal. Use update_elements to modify existing elements without removing them.",
       inputSchema: {},
     },
     async () => {

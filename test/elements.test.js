@@ -102,6 +102,45 @@ describe("makeElement", () => {
     const el = makeElement("rectangle", { id: "custom-id" });
     assert.equal(el.id, "custom-id");
   });
+
+  it("estimates wider text for Excalifont than Helvetica", () => {
+    const excali = makeElement("text", { text: "Hello World", fontFamily: 5 });
+    const helv = makeElement("text", { text: "Hello World", fontFamily: 2 });
+    assert.ok(excali.width > helv.width);
+  });
+
+  it("estimates taller height for multiline text", () => {
+    const single = makeElement("text", { text: "one line" });
+    const multi = makeElement("text", { text: "line1\nline2\nline3" });
+    assert.ok(multi.height > single.height);
+  });
+
+  it("uses explicit width/height on text when provided", () => {
+    const el = makeElement("text", { text: "Hi", width: 999, height: 888 });
+    assert.equal(el.width, 999);
+    assert.equal(el.height, 888);
+  });
+
+  it("allows overriding endArrowhead to null on arrow", () => {
+    const el = makeElement("arrow", { points: [[0, 0], [100, 0]], endArrowhead: null });
+    assert.equal(el.endArrowhead, null);
+  });
+
+  it("arrow defaults to [[0,0]] points when none provided", () => {
+    const el = makeElement("arrow", {});
+    assert.deepEqual(el.points, [[0, 0]]);
+  });
+
+  it("sets containerId on text when provided", () => {
+    const el = makeElement("text", { text: "Hi", containerId: "parent-123" });
+    assert.equal(el.containerId, "parent-123");
+  });
+
+  it("does not mutate BASE_DEFAULTS across calls", () => {
+    makeElement("rectangle", { strokeColor: "#ff0000" });
+    const el2 = makeElement("rectangle", {});
+    assert.equal(el2.strokeColor, "#1e1e1e");
+  });
 });
 
 describe("incrementVersion", () => {
