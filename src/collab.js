@@ -3,7 +3,7 @@ const { encrypt, decrypt } = require("./crypto.js");
 
 const COLLAB_SERVER = "https://oss-collab.excalidraw.com";
 const CONNECT_TIMEOUT = 15000;
-const MAX_ELEMENTS_PER_PUSH = 100;
+const MAX_ELEMENTS_PER_PUSH = 500;
 
 class CollabClient {
   constructor() {

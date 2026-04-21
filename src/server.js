@@ -117,7 +117,7 @@ function createServer() {
             })
           )
           .min(1)
-          .max(100)
+          .max(500)
           .describe("Array of Excalidraw elements to draw"),
       },
     },
