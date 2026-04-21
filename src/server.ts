@@ -103,6 +103,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
                 "arrow",
                 "line",
                 "frame",
+                "image",
               ]),
               x: z.number(),
               y: z.number(),
@@ -154,6 +155,15 @@ LAYOUT RULES (CRITICAL — follow these every time):
                 .string()
                 .optional()
                 .describe("Name for frame elements"),
+              fileId: z
+                .string()
+                .optional()
+                .describe("File ID for image elements"),
+              scale: z
+                .array(z.number())
+                .length(2)
+                .optional()
+                .describe("Scale [x, y] for image elements"),
             })
           )
           .min(1)

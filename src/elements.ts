@@ -7,6 +7,7 @@ import type {
   ExcalidrawElement,
   FillStyle,
   FrameElement,
+  ImageElement,
   LinearElement,
   StrokeStyle,
   TextElement,
@@ -136,6 +137,17 @@ export function makeElement(
       type: "frame",
       name: (props as Partial<FrameElement>).name || "",
     } satisfies FrameElement;
+  }
+
+  if (type === "image") {
+    const imageProps = props as Partial<ImageElement> & { fileId?: string };
+    return {
+      ...base,
+      type: "image",
+      fileId: imageProps.fileId || randomUUID(),
+      status: "saved",
+      scale: imageProps.scale || [1, 1],
+    } satisfies ImageElement;
   }
 
   return base;

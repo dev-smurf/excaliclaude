@@ -5,7 +5,8 @@ export type ElementType =
   | "text"
   | "arrow"
   | "line"
-  | "frame";
+  | "frame"
+  | "image";
 
 export type FillStyle = "solid" | "hachure" | "cross-hatch" | "zigzag";
 export type StrokeStyle = "solid" | "dashed" | "dotted";
@@ -84,11 +85,19 @@ export interface FrameElement extends BaseElement {
   name: string;
 }
 
+export interface ImageElement extends BaseElement {
+  type: "image";
+  fileId: string;
+  status: "pending" | "saved" | "error";
+  scale: [number, number];
+}
+
 export type ExcalidrawElement =
   | BaseElement
   | TextElement
   | LinearElement
-  | FrameElement;
+  | FrameElement
+  | ImageElement;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ElementProps = Record<string, any>;

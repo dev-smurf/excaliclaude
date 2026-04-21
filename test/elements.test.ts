@@ -155,6 +155,26 @@ describe("makeElement", () => {
     assert.equal(el.name, "");
   });
 
+  it("creates an image element with fileId", () => {
+    const el = makeElement("image", {
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 150,
+      fileId: "img-123",
+    }) as any;
+    assert.equal(el.type, "image");
+    assert.equal(el.fileId, "img-123");
+    assert.equal(el.status, "saved");
+    assert.deepEqual(el.scale, [1, 1]);
+  });
+
+  it("image auto-generates fileId when not provided", () => {
+    const el = makeElement("image", { x: 0, y: 0, width: 100, height: 100 }) as any;
+    assert.equal(el.type, "image");
+    assert.ok(el.fileId.length > 10);
+  });
+
   it("does not mutate BASE_DEFAULTS across calls", () => {
     makeElement("rectangle", { strokeColor: "#ff0000" });
     const el2 = makeElement("rectangle", {});
