@@ -1,0 +1,54 @@
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: daily
+      time: "06:00"
+      timezone: America/Montreal
+    open-pull-requests-limit: 10
+    reviewers:
+      - dev-smurf
+    labels:
+      - dependencies
+      - automated
+    commit-message:
+      prefix: "deps"
+      include: scope
+    groups:
+      typescript-toolchain:
+        patterns:
+          - "typescript"
+          - "@types/*"
+          - "tsx"
+        update-types:
+          - minor
+          - patch
+      mcp-sdk:
+        patterns:
+          - "@modelcontextprotocol/*"
+      socket-io:
+        patterns:
+          - "socket.io-client"
+      validation:
+        patterns:
+          - "zod"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - version-update:semver-major
+    versioning-strategy: increase
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+      time: "06:00"
+      timezone: America/Montreal
+    open-pull-requests-limit: 5
+    labels:
+      - ci
+      - automated
+    commit-message:
+      prefix: "ci"
