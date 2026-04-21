@@ -148,7 +148,10 @@ class CollabClient {
       return;
     }
 
-    await this.pushElements(deletedElements);
+    for (let i = 0; i < deletedElements.length; i += MAX_ELEMENTS_PER_PUSH) {
+      const batch = deletedElements.slice(i, i + MAX_ELEMENTS_PER_PUSH);
+      await this.pushElements(batch);
+    }
   }
 
   async clearAll() {
