@@ -38,7 +38,7 @@ npx excaliclaude serve --token <tok> # With Bearer auth (recommended when using 
 - Payload types: SCENE_INIT, SCENE_UPDATE
 - Max 500 elements per push
 - Auto-reconnect: exponential backoff, max 5 attempts
-- HTTP serve: stateless StreamableHTTPServerTransport, Bearer token auth, open sockets force-closed on shutdown
+- HTTP serve: stateful per-session transports (shared CollabClient), Bearer token auth, open sockets force-closed on shutdown
 - Auth token from EXCALICLAUDE_TOKEN env var or --token CLI flag (CLI takes precedence)
 - Room key is NEVER logged or written to disk
 - Origin header: `Origin: https://excalidraw.com` (required by collab server)

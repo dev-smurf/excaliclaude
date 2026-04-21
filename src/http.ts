@@ -5,15 +5,18 @@
  * StreamableHTTPServerTransport. Intended for use behind a tunnel
  * (ngrok, Cloudflare Tunnel, etc.) so Claude.ai can connect locally.
  *
- * Stateless mode is used (no session IDs) because a single CollabClient
- * handles one Excalidraw room at a time — HTTP session tracking adds no value.
+ * Each new MCP client connection (initialize request) creates a fresh
+ * McpServer + transport pair, but they all share a single CollabClient
+ * so the Excalidraw room connection persists across reconnects.
  */
 
+import crypto from "node:crypto";
 import { createServer as createHttpServer, type Server } from "node:http";
 import type { Socket } from "node:net";
 
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
+import { CollabClient } from "./collab.js";
 import { createServer } from "./server.js";
 
 export interface HttpServerOptions {
@@ -45,13 +48,13 @@ export async function createHttpMcpServer(
 ): Promise<HttpServerResult> {
   const { port, token } = options;
 
-  const { server } = createServer();
+  // Shared Excalidraw client — persists across MCP sessions so the
+  // room connection survives if the MCP client (e.g. Claude.ai) reconnects.
+  const client = new CollabClient();
 
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined, // stateless — no session tracking
-  });
-
-  await server.connect(transport);
+  // Active transport for the current MCP session.
+  // Recreated when a new client connects (sends an initialize request).
+  let activeTransport: StreamableHTTPServerTransport | null = null;
 
   // Track open sockets so we can force-close them on shutdown,
   // preventing the server from hanging on open SSE streams.
@@ -68,10 +71,48 @@ export async function createHttpMcpServer(
       }
     }
 
-    // Delegate to the MCP transport — it reads the body from the stream itself.
-    // Do NOT consume req body here; reading it first exhausts the stream and
-    // causes the transport's internal Hono adapter to receive an empty body (500).
-    await transport.handleRequest(req, res);
+    // ── Session routing ────────────────────────────────────────────────────
+    const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+    // Known session → route to existing transport.
+    if (sessionId && activeTransport?.sessionId === sessionId) {
+      await activeTransport.handleRequest(req, res);
+      return;
+    }
+
+    // No matching session — only POST can create a new one (via initialize).
+    if (req.method === "POST") {
+      // Spin up a fresh MCP server + transport for this session.
+      // The CollabClient is shared so the Excalidraw connection persists.
+      const { server } = createServer(client);
+      const newTransport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: () => crypto.randomUUID(),
+      });
+      await server.connect(newTransport);
+      await newTransport.handleRequest(req, res);
+
+      // If the request was an initialize, adopt the new session.
+      if (newTransport.sessionId) {
+        if (activeTransport) {
+          await activeTransport.close().catch(() => {});
+        }
+        activeTransport = newTransport;
+      } else {
+        // Non-init request without valid session — transport already rejected it.
+        await newTransport.close().catch(() => {});
+      }
+      return;
+    }
+
+    // GET / DELETE without a valid session.
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        jsonrpc: "2.0",
+        error: { code: -32000, message: "Bad Request: No active session" },
+        id: null,
+      })
+    );
   });
 
   httpServer.on("connection", (socket: Socket) => {
@@ -88,9 +129,9 @@ export async function createHttpMcpServer(
     // Destroy open connections (including long-lived SSE streams).
     for (const socket of openSockets) socket.destroy();
     return new Promise((resolve, reject) => {
-      transport.close().catch(() => {
-        // Ignore transport close errors during shutdown.
-      });
+      if (activeTransport) {
+        activeTransport.close().catch(() => {});
+      }
       httpServer.close((err) => (err ? reject(err) : resolve()));
     });
   };

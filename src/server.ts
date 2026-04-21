@@ -18,14 +18,20 @@ import { buildShapeLabel, buildArrowLabel } from "./labels.js";
 import type { LabelProps } from "./labels.js";
 import type { ExcalidrawElement, TextElement } from "./types.js";
 
-/** Creates the MCP server and its backing CollabClient. Caller owns transport setup. */
-export function createServer(): { server: McpServer; client: CollabClient } {
+/**
+ * Creates the MCP server and its backing CollabClient. Caller owns transport setup.
+ *
+ * @param existingClient - Optional CollabClient to reuse. When omitted a new
+ *   one is created. The HTTP transport passes a shared client so the Excalidraw
+ *   room connection survives across MCP session reconnects.
+ */
+export function createServer(existingClient?: CollabClient): { server: McpServer; client: CollabClient } {
   const server = new McpServer({
     name: "excaliclaude",
     version: "0.1.0",
   });
 
-  const client = new CollabClient();
+  const client = existingClient ?? new CollabClient();
 
   server.registerTool(
     "connect",
