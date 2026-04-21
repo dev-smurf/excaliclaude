@@ -164,7 +164,7 @@ function createServer() {
             built.boundElements = [{ id: labelEl.id, type: "text" }];
             builtElements.push(built, labelEl);
           } else if (el.label && (el.type === "arrow" || el.type === "line")) {
-            // Arrow/line labels: standalone text near the midpoint (not bound)
+            // Arrow/line labels: standalone text positioned to avoid overlap
             const labelFontSize = el.label.fontSize || 12;
             const labelText = el.label.text;
             const labelLines = labelText.split("\n");
@@ -174,18 +174,33 @@ function createServer() {
 
             const points = built.points || [[0, 0]];
             const lastPt = points[points.length - 1];
-            const isHorizontal = Math.abs(lastPt[0]) >= Math.abs(lastPt[1]);
+            const dx = lastPt[0];
+            const dy = lastPt[1];
+            const isHorizontal = Math.abs(dx) >= Math.abs(dy);
+            const isVertical = !isHorizontal;
+
+            // For vertical arrows with significant travel (>40px), auto-route
+            // as an L-shape to avoid cutting through content below/above
+            if (isVertical && Math.abs(dy) > 40 && points.length === 2) {
+              const offset = 35;
+              const direction = dx >= 0 ? 1 : -1;
+              const routeX = offset * direction;
+              built.points = [[0, 0], [routeX, 0], [routeX, dy], [0, dy]];
+              built.width = Math.abs(routeX);
+              built.height = Math.abs(dy);
+            }
 
             let labelX, labelY;
             if (isHorizontal) {
-              // Place above the arrow midpoint
-              const midX = built.x + lastPt[0] / 2;
+              // Horizontal: label above, centered on midpoint
+              const midX = built.x + dx / 2;
               labelX = midX - labelWidth / 2;
               labelY = built.y - labelHeight - 4;
             } else {
-              // Place to the right of the arrow midpoint
-              const midY = built.y + lastPt[1] / 2;
-              labelX = built.x + 8;
+              // Vertical: label to the right of the routed arrow
+              const routeOffset = 35 + 6;
+              const midY = built.y + dy / 2;
+              labelX = built.x + routeOffset;
               labelY = midY - labelHeight / 2;
             }
 
