@@ -1,24 +1,30 @@
-const { io } = require("socket.io-client");
-const { encrypt, decrypt } = require("./crypto.js");
+import { io, Socket } from "socket.io-client";
 
-const COLLAB_SERVER = "https://oss-collab.excalidraw.com";
+import { encrypt, decrypt } from "./crypto.js";
+import type {
+  BroadcastPayload,
+  ClientToServerEvents,
+  ConnectResult,
+  ExcalidrawElement,
+  ServerToClientEvents,
+} from "./types.js";
+
+export const COLLAB_SERVER = "https://oss-collab.excalidraw.com";
 const CONNECT_TIMEOUT = 15000;
-const MAX_ELEMENTS_PER_PUSH = 500;
+export const MAX_ELEMENTS_PER_PUSH = 500;
 
-class CollabClient {
-  constructor() {
-    this._socket = null;
-    this._roomId = null;
-    this._roomKey = null;
-    this._elements = new Map();
-    this._connected = false;
-  }
+export class CollabClient {
+  _socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
+  _roomId: string | null = null;
+  _roomKey: string | null = null;
+  _elements: Map<string, ExcalidrawElement> = new Map();
+  _connected = false;
 
-  isConnected() {
+  isConnected(): boolean {
     return this._connected && this._socket?.connected === true;
   }
 
-  async connect(roomId, roomKey) {
+  async connect(roomId: string, roomKey: string): Promise<ConnectResult> {
     if (this._socket) {
       this.disconnect();
     }
@@ -27,7 +33,7 @@ class CollabClient {
     this._roomKey = roomKey;
     this._elements.clear();
 
-    return new Promise((resolve, reject) => {
+    return new Promise<ConnectResult>((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error(`Connection timed out after ${CONNECT_TIMEOUT}ms`));
         this.disconnect();
@@ -39,15 +45,15 @@ class CollabClient {
         extraHeaders: {
           Origin: "https://excalidraw.com",
         },
-      });
+      }) as Socket<ServerToClientEvents, ClientToServerEvents>;
 
-      this._socket.on("connect_error", (err) => {
+      this._socket.on("connect_error", (err: Error) => {
         clearTimeout(timer);
         reject(new Error(`Socket connection error: ${err.message}`));
       });
 
       this._socket.on("init-room", () => {
-        this._socket.emit("join-room", this._roomId);
+        this._socket!.emit("join-room", this._roomId!);
       });
 
       this._socket.on("first-in-room", () => {
@@ -56,7 +62,7 @@ class CollabClient {
         resolve({ alone: true });
       });
 
-      this._socket.on("room-user-change", (users) => {
+      this._socket.on("room-user-change", (users: string[]) => {
         if (!this._connected) {
           clearTimeout(timer);
           this._connected = true;
@@ -64,25 +70,29 @@ class CollabClient {
         }
       });
 
-      this._socket.on("client-broadcast", async (encryptedData, iv) => {
-        try {
-          const data = await decrypt(
-            this._roomKey,
-            encryptedData,
-            new Uint8Array(iv)
-          );
-          if (
-            data.payload?.elements &&
-            (data.type === "SCENE_INIT" || data.type === "SCENE_UPDATE")
-          ) {
-            for (const el of data.payload.elements) {
-              this._elements.set(el.id, el);
+      this._socket.on(
+        "client-broadcast",
+        async (encryptedData: ArrayBuffer, iv: number[]) => {
+          try {
+            const data = (await decrypt(
+              this._roomKey!,
+              encryptedData,
+              new Uint8Array(iv)
+            )) as BroadcastPayload;
+
+            if (
+              data.payload?.elements &&
+              (data.type === "SCENE_INIT" || data.type === "SCENE_UPDATE")
+            ) {
+              for (const el of data.payload.elements) {
+                this._elements.set(el.id, el);
+              }
             }
+          } catch {
+            // Decrypt failure — wrong key or corrupt data, skip silently
           }
-        } catch {
-          // Decrypt failure — wrong key or corrupt data, skip silently
         }
-      });
+      );
 
       this._socket.on("disconnect", () => {
         this._connected = false;
@@ -90,7 +100,7 @@ class CollabClient {
     });
   }
 
-  disconnect() {
+  disconnect(): void {
     if (this._socket) {
       this._socket.disconnect();
       this._socket = null;
@@ -100,7 +110,7 @@ class CollabClient {
     this._roomKey = null;
   }
 
-  async pushElements(elements) {
+  async pushElements(elements: ExcalidrawElement[]): Promise<void> {
     this._assertConnected();
 
     if (!Array.isArray(elements) || elements.length === 0) {
@@ -114,31 +124,31 @@ class CollabClient {
     }
 
     const payload = {
-      type: "SCENE_UPDATE",
+      type: "SCENE_UPDATE" as const,
       payload: { elements },
     };
 
-    const { buffer, iv } = await encrypt(this._roomKey, payload);
-    this._socket.emit("server-broadcast", this._roomId, buffer, iv);
+    const { buffer, iv } = await encrypt(this._roomKey!, payload);
+    this._socket!.emit("server-broadcast", this._roomId!, buffer, iv);
 
     for (const el of elements) {
       this._elements.set(el.id, el);
     }
   }
 
-  getElements() {
+  getElements(): ExcalidrawElement[] {
     return Array.from(this._elements.values()).filter((el) => !el.isDeleted);
   }
 
-  async deleteElements(ids) {
+  async deleteElements(ids: string[]): Promise<void> {
     this._assertConnected();
 
     const deletedElements = ids
       .map((id) => this._elements.get(id))
-      .filter(Boolean)
+      .filter((el): el is ExcalidrawElement => el != null)
       .map((el) => ({
         ...el,
-        isDeleted: true,
+        isDeleted: true as const,
         version: el.version + 1,
         versionNonce: Math.floor(Math.random() * 2147483646),
         updated: Date.now(),
@@ -150,11 +160,11 @@ class CollabClient {
 
     for (let i = 0; i < deletedElements.length; i += MAX_ELEMENTS_PER_PUSH) {
       const batch = deletedElements.slice(i, i + MAX_ELEMENTS_PER_PUSH);
-      await this.pushElements(batch);
+      await this.pushElements(batch as ExcalidrawElement[]);
     }
   }
 
-  async clearAll() {
+  async clearAll(): Promise<void> {
     this._assertConnected();
 
     const allIds = Array.from(this._elements.keys());
@@ -165,11 +175,9 @@ class CollabClient {
     await this.deleteElements(allIds);
   }
 
-  _assertConnected() {
+  private _assertConnected(): void {
     if (!this.isConnected()) {
       throw new Error("Not connected. Call connect() first.");
     }
   }
 }
-
-module.exports = { CollabClient, COLLAB_SERVER, MAX_ELEMENTS_PER_PUSH };

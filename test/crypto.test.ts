@@ -1,16 +1,17 @@
-const { describe, it } = require("node:test");
-const assert = require("node:assert/strict");
-const { webcrypto } = require("node:crypto");
-const { encrypt, decrypt } = require("../src/crypto.js");
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+import { webcrypto } from "node:crypto";
 
-async function generateTestKey() {
+import { encrypt, decrypt } from "../src/crypto.js";
+
+async function generateTestKey(): Promise<string> {
   const key = await webcrypto.subtle.generateKey(
     { name: "AES-GCM", length: 128 },
     true,
     ["encrypt", "decrypt"]
   );
-  const jwk = await webcrypto.subtle.exportKey("jwk", key);
-  return jwk.k;
+  const jwk = await webcrypto.subtle.exportKey("jwk", key as CryptoKey);
+  return jwk.k!;
 }
 
 describe("crypto", () => {

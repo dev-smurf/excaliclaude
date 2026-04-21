@@ -1,14 +1,16 @@
 {
   "name": "excaliclaude",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server that lets Claude draw in your Excalidraw canvas in real-time via the collaboration protocol",
-  "main": "src/server.js",
+  "main": "dist/src/server.js",
   "bin": {
-    "excaliclaude": "bin/excaliclaude.js"
+    "excaliclaude": "dist/bin/excaliclaude.js"
   },
   "scripts": {
-    "test": "node --test test/*.test.js",
-    "start": "node bin/excaliclaude.js"
+    "build": "tsc",
+    "test": "tsx --test test/*.test.ts",
+    "start": "node dist/bin/excaliclaude.js",
+    "prepublishOnly": "npm run build"
   },
   "engines": {
     "node": ">=18"
@@ -27,9 +29,20 @@
     "type": "git",
     "url": "git+https://github.com/dev-smurf/excaliclaude.git"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE",
+    "CLAUDE.md"
+  ],
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "socket.io-client": "^4.8.0",
     "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
   }
 }

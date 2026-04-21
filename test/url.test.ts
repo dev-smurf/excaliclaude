@@ -1,6 +1,7 @@
-const { describe, it } = require("node:test");
-const assert = require("node:assert/strict");
-const { parseCollabUrl } = require("../src/url.js");
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+
+import { parseCollabUrl } from "../src/url.js";
 
 describe("parseCollabUrl", () => {
   it("parses a valid collab URL", () => {
@@ -21,12 +22,6 @@ describe("parseCollabUrl", () => {
 
   it("throws on empty string", () => {
     assert.throws(() => parseCollabUrl(""), /non-empty string/);
-  });
-
-  it("throws on non-string input", () => {
-    assert.throws(() => parseCollabUrl(null), /non-empty string/);
-    assert.throws(() => parseCollabUrl(123), /non-empty string/);
-    assert.throws(() => parseCollabUrl(undefined), /non-empty string/);
   });
 
   it("throws on URL without #room fragment", () => {

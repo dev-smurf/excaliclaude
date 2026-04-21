@@ -1,10 +1,12 @@
-const { McpServer } = require("@modelcontextprotocol/sdk/server/mcp.js");
-const { z } = require("zod");
-const { CollabClient } = require("./collab.js");
-const { parseCollabUrl } = require("./url.js");
-const { makeElement } = require("./elements.js");
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { z } from "zod";
 
-function createServer() {
+import { CollabClient } from "./collab.js";
+import { makeElement } from "./elements.js";
+import { parseCollabUrl } from "./url.js";
+import type { ExcalidrawElement, TextElement } from "./types.js";
+
+export function createServer(): { server: McpServer; client: CollabClient } {
   const server = new McpServer({
     name: "excaliclaude",
     version: "0.1.0",
@@ -26,7 +28,7 @@ function createServer() {
           ),
       },
     },
-    async ({ url }) => {
+    async ({ url }: { url: string }) => {
       try {
         if (client.isConnected()) {
           client.disconnect();
@@ -38,14 +40,19 @@ function createServer() {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `Connected to room ${roomId.slice(0, 8)}... ${result.alone ? "(you are alone)" : `(${result.users} users in room)`}`,
             },
           ],
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `Connection failed: ${err.message}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Connection failed: ${(err as Error).message}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -140,28 +147,48 @@ LAYOUT RULES (CRITICAL — follow these every time):
           .describe("Array of Excalidraw elements to draw"),
       },
     },
-    async ({ elements }) => {
+    async ({ elements }: { elements: Array<Record<string, unknown>> }) => {
       try {
-        const builtElements = [];
+        const builtElements: ExcalidrawElement[] = [];
 
         for (const el of elements) {
-          const built = makeElement(el.type, el);
+          const elType = el.type as string;
+          const built = makeElement(
+            elType as ExcalidrawElement["type"],
+            el as Record<string, unknown>
+          );
 
-          if (el.label && ["rectangle", "ellipse", "diamond"].includes(el.type)) {
-            const labelFontSize = el.label.fontSize || 16;
-            const labelText = el.label.text;
+          const label = el.label as
+            | { text: string; fontSize?: number; x?: number; y?: number }
+            | undefined;
+
+          if (
+            label &&
+            ["rectangle", "ellipse", "diamond"].includes(elType)
+          ) {
+            const labelFontSize = label.fontSize || 16;
+            const labelText = label.text;
             const labelLines = labelText.split("\n");
             const maxLineLen = Math.max(...labelLines.map((l) => l.length));
-            const labelWidth = Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
-            const labelHeight = Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
+            const labelWidth =
+              Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
+            const labelHeight =
+              Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
 
             // Auto white text on dark backgrounds (perceptual luminance)
-            const bg = built.backgroundColor || "transparent";
+            const bg = (built.backgroundColor || "transparent") as string;
             const isDarkBg = (() => {
-              if (bg === "transparent" || built.fillStyle !== "solid") return false;
-              const m = bg.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+              if (bg === "transparent" || built.fillStyle !== "solid")
+                return false;
+              const m = bg.match(
+                /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i
+              );
               if (!m) return false;
-              const [r, g, b] = [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+              const [r, g, b] = [
+                parseInt(m[1]!, 16),
+                parseInt(m[2]!, 16),
+                parseInt(m[3]!, 16),
+              ];
               return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
             })();
             const labelColor = isDarkBg ? "#ffffff" : "#1e1e1e";
@@ -173,35 +200,41 @@ LAYOUT RULES (CRITICAL — follow these every time):
               text: labelText,
               fontSize: labelFontSize,
               strokeColor: labelColor,
-              textAlign: "center",
-              verticalAlign: "middle",
+              textAlign: "center" as const,
+              verticalAlign: "middle" as const,
               containerId: built.id,
               x: labelX,
               y: labelY,
               width: labelWidth,
               height: labelHeight,
             });
-            built.boundElements = [{ id: labelEl.id, type: "text" }];
+            (built as { boundElements: { id: string; type: string }[] | null }).boundElements = [
+              { id: labelEl.id, type: "text" },
+            ];
             builtElements.push(built, labelEl);
-          } else if (el.label && (el.type === "arrow" || el.type === "line")) {
-            // Arrow/line labels: standalone text near the arrow
-            // No auto-routing — Claude decides the points and label placement
-            const labelFontSize = el.label.fontSize || 12;
-            const labelText = el.label.text;
+          } else if (
+            label &&
+            (elType === "arrow" || elType === "line")
+          ) {
+            const labelFontSize = label.fontSize || 12;
+            const labelText = label.text;
             const labelLines = labelText.split("\n");
             const maxLineLen = Math.max(...labelLines.map((l) => l.length));
-            const labelWidth = Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
-            const labelHeight = Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
+            const labelWidth =
+              Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
+            const labelHeight =
+              Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
 
-            // Use explicit label position if provided, otherwise auto-place
-            let labelX, labelY;
-            if (el.label.x !== undefined && el.label.y !== undefined) {
-              labelX = el.label.x;
-              labelY = el.label.y;
+            let labelX: number;
+            let labelY: number;
+            if (label.x !== undefined && label.y !== undefined) {
+              labelX = label.x;
+              labelY = label.y;
             } else {
-              // Default: place above for horizontal, right for vertical
-              const points = built.points || [[0, 0]];
-              const lastPt = points[points.length - 1];
+              const points = (built as { points: [number, number][] }).points || [
+                [0, 0],
+              ];
+              const lastPt = points[points.length - 1]!;
               const isHorizontal = Math.abs(lastPt[0]) >= Math.abs(lastPt[1]);
 
               if (isHorizontal) {
@@ -235,14 +268,19 @@ LAYOUT RULES (CRITICAL — follow these every time):
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: `Drew ${builtElements.length} elements on the canvas.`,
             },
           ],
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `Draw failed: ${err.message}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Draw failed: ${(err as Error).message}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -253,7 +291,8 @@ LAYOUT RULES (CRITICAL — follow these every time):
     "get_scene",
     {
       title: "Get Excalidraw scene",
-      description: "Get all non-deleted elements on the canvas. Returns JSON with 'count' (integer) and 'elements' (array of {id, type, x, y, width, height, text}). Call this BEFORE draw_elements or update_elements when adding to an existing canvas — you need current positions and IDs to avoid overlaps and to target updates.",
+      description:
+        "Get all non-deleted elements on the canvas. Returns JSON with 'count' (integer) and 'elements' (array of {id, type, x, y, width, height, text}). Call this BEFORE draw_elements or update_elements when adding to an existing canvas — you need current positions and IDs to avoid overlaps and to target updates.",
       inputSchema: {},
     },
     async () => {
@@ -262,7 +301,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: JSON.stringify(
                 {
                   count: elements.length,
@@ -273,7 +312,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
                     y: el.y,
                     width: el.width,
                     height: el.height,
-                    text: el.text,
+                    text: (el as TextElement).text,
                   })),
                 },
                 null,
@@ -284,7 +323,12 @@ LAYOUT RULES (CRITICAL — follow these every time):
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `Get scene failed: ${err.message}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Get scene failed: ${(err as Error).message}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -321,35 +365,47 @@ LAYOUT RULES (CRITICAL — follow these every time):
           )
           .min(1)
           .max(500)
-          .describe("Array of updates with element ID and changed properties"),
+          .describe(
+            "Array of updates with element ID and changed properties"
+          ),
       },
     },
-    async ({ updates }) => {
+    async ({
+      updates,
+    }: {
+      updates: Array<{ id: string } & Record<string, unknown>>;
+    }) => {
       try {
-        const updatedElements = [];
+        const updatedElements: ExcalidrawElement[] = [];
         let notFound = 0;
 
         for (const upd of updates) {
-          const existing = client.getElements().find((el) => el.id === upd.id);
+          const existing = client
+            .getElements()
+            .find((el) => el.id === upd.id);
           if (!existing) {
             notFound++;
             continue;
           }
 
-          const { id, ...changes } = upd;
+          const { id: _id, ...changes } = upd;
 
-          // For text elements, also update originalText when text changes
-          if (changes.text !== undefined && existing.type === "text") {
-            changes.originalText = changes.text;
+          if (
+            (changes as Record<string, unknown>).text !== undefined &&
+            existing.type === "text"
+          ) {
+            (changes as Record<string, unknown>).originalText = (
+              changes as Record<string, unknown>
+            ).text;
           }
 
-          const updated = {
+          const updated: ExcalidrawElement = {
             ...existing,
             ...changes,
             version: existing.version + 1,
             versionNonce: Math.floor(Math.random() * 2147483646),
             updated: Date.now(),
-          };
+          } as ExcalidrawElement;
 
           updatedElements.push(updated);
         }
@@ -362,10 +418,15 @@ LAYOUT RULES (CRITICAL — follow these every time):
           `Updated ${updatedElements.length} elements.` +
           (notFound > 0 ? ` ${notFound} not found.` : "");
 
-        return { content: [{ type: "text", text: msg }] };
+        return { content: [{ type: "text" as const, text: msg }] };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `Update failed: ${err.message}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Update failed: ${(err as Error).message}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -376,7 +437,8 @@ LAYOUT RULES (CRITICAL — follow these every time):
     "delete_elements",
     {
       title: "Delete Excalidraw elements",
-      description: "Delete elements from the canvas by their IDs. IDs not found in the current scene are silently ignored. Call get_scene first to get current element IDs.",
+      description:
+        "Delete elements from the canvas by their IDs. IDs not found in the current scene are silently ignored. Call get_scene first to get current element IDs.",
       inputSchema: {
         ids: z
           .array(z.string())
@@ -384,7 +446,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
           .describe("Array of element IDs to delete"),
       },
     },
-    async ({ ids }) => {
+    async ({ ids }: { ids: string[] }) => {
       try {
         const before = client.getElements().length;
         await client.deleteElements(ids);
@@ -392,12 +454,20 @@ LAYOUT RULES (CRITICAL — follow these every time):
         const actuallyDeleted = before - after;
         return {
           content: [
-            { type: "text", text: `Deleted ${actuallyDeleted} of ${ids.length} elements.` },
+            {
+              type: "text" as const,
+              text: `Deleted ${actuallyDeleted} of ${ids.length} elements.`,
+            },
           ],
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `Delete failed: ${err.message}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Delete failed: ${(err as Error).message}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -408,18 +478,24 @@ LAYOUT RULES (CRITICAL — follow these every time):
     "clear_canvas",
     {
       title: "Clear Excalidraw canvas",
-      description: "Remove ALL elements from the canvas permanently. Cannot be undone. The canvas will be empty for all collaborators. Use delete_elements for selective removal. Use update_elements to modify existing elements without removing them.",
+      description:
+        "Remove ALL elements from the canvas permanently. Cannot be undone. The canvas will be empty for all collaborators. Use delete_elements for selective removal. Use update_elements to modify existing elements without removing them.",
       inputSchema: {},
     },
     async () => {
       try {
         await client.clearAll();
         return {
-          content: [{ type: "text", text: "Canvas cleared." }],
+          content: [{ type: "text" as const, text: "Canvas cleared." }],
         };
       } catch (err) {
         return {
-          content: [{ type: "text", text: `Clear failed: ${err.message}` }],
+          content: [
+            {
+              type: "text" as const,
+              text: `Clear failed: ${(err as Error).message}`,
+            },
+          ],
           isError: true,
         };
       }
@@ -428,5 +504,3 @@ LAYOUT RULES (CRITICAL — follow these every time):
 
   return { server, client };
 }
-
-module.exports = { createServer };

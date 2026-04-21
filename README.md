@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-E07C4C?style=for-the-badge" alt="MIT License"></a>&nbsp;
+  <img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript">&nbsp;
   <img src="https://img.shields.io/badge/node-%3E%3D18-339933?style=for-the-badge&logo=node.js&logoColor=white" alt="Node 18+">&nbsp;
   <img src="https://img.shields.io/badge/MCP-server-6F42C1?style=for-the-badge&logo=anthropic&logoColor=white" alt="MCP Server">&nbsp;
   <img src="https://img.shields.io/badge/E2E-encrypted-2D7D46?style=for-the-badge&logo=letsencrypt&logoColor=white" alt="E2E Encrypted">
@@ -153,15 +154,16 @@ Claude: Connected to room abc12345... (2 users in room)
 ## Architecture
 
 ```
-bin/excaliclaude.js         CLI entry point (stdio transport)
+bin/excaliclaude.ts         CLI entry point (stdio transport)
        |
-src/server.js               MCP server with 5 tools
+src/server.ts               MCP server with 6 tools
        |
-src/collab.js               Socket.io connection + room management + element cache
+src/collab.ts               Socket.io connection + room management + element cache
        |
-       |-- src/crypto.js    AES-128-GCM encrypt/decrypt (WebCrypto API)
-       |-- src/elements.js  Element factory with Excalidraw defaults
-       |-- src/url.js       Parse collab URLs into roomId + roomKey
+       |-- src/crypto.ts    AES-128-GCM encrypt/decrypt (WebCrypto API)
+       |-- src/elements.ts  Element factory with Excalidraw defaults
+       |-- src/url.ts       Parse collab URLs into roomId + roomKey
+       |-- src/types.ts     Shared TypeScript interfaces
 ```
 
 <br>

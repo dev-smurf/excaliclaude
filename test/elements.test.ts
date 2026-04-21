@@ -1,6 +1,8 @@
-const { describe, it } = require("node:test");
-const assert = require("node:assert/strict");
-const { makeElement, incrementVersion } = require("../src/elements.js");
+import { describe, it } from "node:test";
+import assert from "node:assert/strict";
+
+import { makeElement, incrementVersion } from "../src/elements.js";
+import type { LinearElement, TextElement } from "../src/types.js";
 
 describe("makeElement", () => {
   it("creates a rectangle with all required fields", () => {
@@ -47,7 +49,7 @@ describe("makeElement", () => {
   });
 
   it("creates a text element with text-specific fields", () => {
-    const el = makeElement("text", { text: "Hello", x: 50, y: 50 });
+    const el = makeElement("text", { text: "Hello", x: 50, y: 50 }) as TextElement;
 
     assert.equal(el.type, "text");
     assert.equal(el.text, "Hello");
@@ -68,7 +70,7 @@ describe("makeElement", () => {
       width: 200,
       height: 0,
       points: [[0, 0], [200, 0]],
-    });
+    }) as LinearElement;
 
     assert.equal(el.type, "arrow");
     assert.deepEqual(el.points, [[0, 0], [200, 0]]);
@@ -80,7 +82,7 @@ describe("makeElement", () => {
   it("creates a line without arrowheads", () => {
     const el = makeElement("line", {
       points: [[0, 0], [100, 100]],
-    });
+    }) as LinearElement;
 
     assert.equal(el.type, "line");
     assert.equal(el.endArrowhead, null);
@@ -122,17 +124,23 @@ describe("makeElement", () => {
   });
 
   it("allows overriding endArrowhead to null on arrow", () => {
-    const el = makeElement("arrow", { points: [[0, 0], [100, 0]], endArrowhead: null });
+    const el = makeElement("arrow", {
+      points: [[0, 0], [100, 0]],
+      endArrowhead: null,
+    }) as LinearElement;
     assert.equal(el.endArrowhead, null);
   });
 
   it("arrow defaults to [[0,0]] points when none provided", () => {
-    const el = makeElement("arrow", {});
+    const el = makeElement("arrow", {}) as LinearElement;
     assert.deepEqual(el.points, [[0, 0]]);
   });
 
   it("sets containerId on text when provided", () => {
-    const el = makeElement("text", { text: "Hi", containerId: "parent-123" });
+    const el = makeElement("text", {
+      text: "Hi",
+      containerId: "parent-123",
+    }) as TextElement;
     assert.equal(el.containerId, "parent-123");
   });
 

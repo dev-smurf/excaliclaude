@@ -1,6 +1,8 @@
+import type { RoomCoords } from "./types.js";
+
 const COLLAB_URL_REGEX = /#room=([a-f0-9]+),([A-Za-z0-9_-]+)$/;
 
-function parseCollabUrl(url) {
+export function parseCollabUrl(url: string): RoomCoords {
   if (typeof url !== "string" || url.length === 0) {
     throw new Error("URL must be a non-empty string");
   }
@@ -12,7 +14,8 @@ function parseCollabUrl(url) {
     );
   }
 
-  const [, roomId, roomKey] = match;
+  const roomId = match[1]!;
+  const roomKey = match[2]!;
 
   if (roomId.length < 10) {
     throw new Error(`Room ID too short: "${roomId}"`);
@@ -24,5 +27,3 @@ function parseCollabUrl(url) {
 
   return { roomId, roomKey };
 }
-
-module.exports = { parseCollabUrl };
