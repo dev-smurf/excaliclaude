@@ -47,7 +47,9 @@ npm install -g excaliclaude
 
 <br>
 
-**Claude Code** — add to `~/.claude.json`:
+### <img src="https://img.shields.io/badge/Claude_Code-E07C4C?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code"> &nbsp; recommended
+
+Add to `~/.claude.json`:
 
 ```json
 {
@@ -59,7 +61,9 @@ npm install -g excaliclaude
 }
 ```
 
-**Cursor / Windsurf / Other MCP clients:**
+<br>
+
+### <img src="https://img.shields.io/badge/Cursor-000?style=for-the-badge&logo=cursor&logoColor=white" alt="Cursor"> &nbsp; <img src="https://img.shields.io/badge/Windsurf-0057FF?style=for-the-badge&logo=codeium&logoColor=white" alt="Windsurf"> &nbsp; <img src="https://img.shields.io/badge/Other-555?style=for-the-badge" alt="Other">
 
 ```json
 {
