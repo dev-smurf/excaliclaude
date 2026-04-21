@@ -100,6 +100,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
                 "text",
                 "arrow",
                 "line",
+                "frame",
               ]),
               x: z.number(),
               y: z.number(),
@@ -147,6 +148,10 @@ LAYOUT RULES (CRITICAL — follow these every time):
                   y: z.number().optional(),
                 })
                 .optional(),
+              name: z
+                .string()
+                .optional()
+                .describe("Name for frame elements"),
             })
           )
           .min(1)
@@ -167,7 +172,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
 
           const label = el.label as LabelProps | undefined;
 
-          if (label && ["rectangle", "ellipse", "diamond"].includes(elType)) {
+          if (label && ["rectangle", "ellipse", "diamond", "frame"].includes(elType)) {
             const labelEl = buildShapeLabel(built, label);
             builtElements.push(built, labelEl);
           } else if (label && (elType === "arrow" || elType === "line")) {

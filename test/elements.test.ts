@@ -144,6 +144,17 @@ describe("makeElement", () => {
     assert.equal(el.containerId, "parent-123");
   });
 
+  it("creates a frame element with name", () => {
+    const el = makeElement("frame", { x: 0, y: 0, width: 400, height: 300, name: "Section A" }) as any;
+    assert.equal(el.type, "frame");
+    assert.equal(el.name, "Section A");
+  });
+
+  it("frame defaults name to empty string", () => {
+    const el = makeElement("frame", { x: 0, y: 0, width: 200, height: 200 }) as any;
+    assert.equal(el.name, "");
+  });
+
   it("does not mutate BASE_DEFAULTS across calls", () => {
     makeElement("rectangle", { strokeColor: "#ff0000" });
     const el2 = makeElement("rectangle", {});

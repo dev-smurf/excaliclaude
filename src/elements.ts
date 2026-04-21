@@ -6,6 +6,7 @@ import type {
   ElementType,
   ExcalidrawElement,
   FillStyle,
+  FrameElement,
   LinearElement,
   StrokeStyle,
   TextElement,
@@ -127,6 +128,14 @@ export function makeElement(
       endBinding: linearProps.endBinding || null,
       elbowed: linearProps.elbowed || false,
     } satisfies LinearElement;
+  }
+
+  if (type === "frame") {
+    return {
+      ...base,
+      type: "frame",
+      name: (props as Partial<FrameElement>).name || "",
+    } satisfies FrameElement;
   }
 
   return base;

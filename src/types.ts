@@ -4,7 +4,8 @@ export type ElementType =
   | "diamond"
   | "text"
   | "arrow"
-  | "line";
+  | "line"
+  | "frame";
 
 export type FillStyle = "solid" | "hachure" | "cross-hatch" | "zigzag";
 export type StrokeStyle = "solid" | "dashed" | "dotted";
@@ -78,7 +79,16 @@ export interface LinearElement extends BaseElement {
   elbowed: boolean;
 }
 
-export type ExcalidrawElement = BaseElement | TextElement | LinearElement;
+export interface FrameElement extends BaseElement {
+  type: "frame";
+  name: string;
+}
+
+export type ExcalidrawElement =
+  | BaseElement
+  | TextElement
+  | LinearElement
+  | FrameElement;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ElementProps = Record<string, any>;
