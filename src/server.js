@@ -136,9 +136,20 @@ function createServer() {
             const labelWidth = Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
             const labelHeight = Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
 
+            // Auto white text on dark backgrounds
+            const bg = built.backgroundColor || "transparent";
+            const isDarkBg = (() => {
+              if (bg === "transparent" || built.fillStyle !== "solid") return false;
+              const m = bg.match(/^#([0-9a-f]{2})/i);
+              if (!m) return false;
+              return parseInt(m[1], 16) < 100;
+            })();
+            const labelColor = isDarkBg ? "#ffffff" : "#1e1e1e";
+
             const labelEl = makeElement("text", {
               text: labelText,
               fontSize: labelFontSize,
+              strokeColor: labelColor,
               textAlign: "center",
               verticalAlign: "middle",
               containerId: built.id,
