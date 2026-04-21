@@ -98,12 +98,15 @@ npm start
 
 | Tool | Description |
 |:-----|:------------|
-| **`connect`** | Join an Excalidraw collab room via URL |
-| **`draw_elements`** | Draw rectangles, ellipses, diamonds, text, arrows, lines |
+| **`connect`** | Join an Excalidraw collab room via URL. Auto-reconnects on drop. |
+| **`draw_elements`** | Draw rectangles, ellipses, diamonds, text, arrows, lines, frames, images |
 | **`update_elements`** | Move, resize, restyle, or change text of existing elements by ID |
-| **`get_scene`** | Read all non-deleted elements with their IDs and positions |
+| **`get_scene`** | Read all elements — compact or full mode with all properties |
+| **`group_elements`** | Group elements so they move together |
 | **`delete_elements`** | Remove specific elements by their ID |
+| **`undo_last_draw`** | Undo the last draw_elements call |
 | **`clear_canvas`** | Wipe the entire canvas clean |
+| **`status`** | Check connection state and element count |
 
 <br>
 

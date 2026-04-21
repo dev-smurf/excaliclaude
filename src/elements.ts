@@ -1,3 +1,11 @@
+/**
+ * Factory for constructing Excalidraw elements with sensible defaults.
+ *
+ * Each element type has required fields that Excalidraw expects. This module
+ * fills in defaults so callers only need to specify what they care about.
+ * Text dimensions are estimated since we have no DOM to measure against.
+ */
+
 import { randomUUID } from "node:crypto";
 
 import type {
@@ -49,6 +57,7 @@ export const BASE_DEFAULTS: BaseDefaults = {
   isDeleted: false,
 };
 
+// Excalidraw uses 31-bit positive integers for seed/versionNonce
 function randomSeed(): number {
   return Math.floor(Math.random() * 2147483646);
 }
@@ -83,6 +92,8 @@ export function makeElement(
     const lines = text.split("\n");
     const maxLineLen = Math.max(...lines.map((l) => l.length));
 
+    // Approximate char widths per font family (no DOM measurement available).
+    // Family 2/9 = monospace-like, 3 = code, default = proportional.
     const charWidthMultiplier =
       fontFamily === 2 || fontFamily === 9
         ? 0.55
@@ -119,6 +130,8 @@ export function makeElement(
       type,
       points: linearProps.points || [[0, 0]],
       startArrowhead: linearProps.startArrowhead || null,
+      // Arrows default to having an arrowhead; lines default to none.
+      // Only override the default if the caller explicitly set endArrowhead.
       endArrowhead:
         type === "arrow"
           ? "endArrowhead" in props
@@ -153,6 +166,7 @@ export function makeElement(
   return base;
 }
 
+/** Bump version so Excalidraw's reconciliation treats this as a newer edit. */
 export function incrementVersion<T extends BaseElement>(element: T): T {
   return {
     ...element,

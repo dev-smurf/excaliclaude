@@ -1,13 +1,23 @@
+/**
+ * AES-128-GCM encryption/decryption matching Excalidraw's collab protocol.
+ *
+ * All scene data is end-to-end encrypted — the collab server never sees
+ * plaintext. The room key (from the URL fragment) is a JWK-encoded AES key.
+ * We use 12-byte random IVs per message, which is the standard for AES-GCM.
+ */
+
 import { webcrypto } from "node:crypto";
 
 import type { EncryptResult } from "./types.js";
 
+// Node's webcrypto types don't perfectly match the browser Crypto interface
 const crypto = webcrypto as unknown as Crypto;
 const IV_LENGTH = 12;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-// Cache imported CryptoKeys to avoid re-importing on every call
+// importKey is expensive (~0.5ms). Since we reuse the same room key for every
+// message, caching the CryptoKey avoids redundant work on high-frequency pushes.
 const keyCache = new Map<string, CryptoKey>();
 
 async function getKey(
@@ -18,6 +28,7 @@ async function getKey(
   const cached = keyCache.get(cacheKey);
   if (cached) return cached;
 
+  // JWK structure must match what Excalidraw generates when creating a room
   const cryptoKey = await crypto.subtle.importKey(
     "jwk",
     {
@@ -28,7 +39,7 @@ async function getKey(
       kty: "oct",
     },
     { name: "AES-GCM", length: 128 },
-    false,
+    false, // non-extractable — the key stays in the crypto subsystem
     [usage]
   );
 

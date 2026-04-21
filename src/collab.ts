@@ -1,3 +1,17 @@
+/**
+ * Socket.io client for Excalidraw's real-time collaboration protocol.
+ *
+ * Handles the full lifecycle: connect, join room, send/receive encrypted
+ * scene updates, auto-reconnect on drops, and local element state tracking.
+ *
+ * Protocol flow:
+ *   1. Open WebSocket to collab server
+ *   2. Server emits "init-room" → we respond with "join-room"
+ *   3. Server emits "first-in-room" or "room-user-change" (handshake complete)
+ *   4. Scene data flows via "server-broadcast" (us→server) and "client-broadcast" (server→us)
+ *   5. All payloads are AES-128-GCM encrypted — the server is a blind relay
+ */
+
 import { io, Socket } from "socket.io-client";
 
 import { encrypt, decrypt, clearKeyCache } from "./crypto.js";
@@ -11,6 +25,7 @@ import type {
 
 export const COLLAB_SERVER = "https://oss-collab.excalidraw.com";
 const CONNECT_TIMEOUT = 15000;
+// Excalidraw clients choke on very large payloads; 500 is a safe batch size
 export const MAX_ELEMENTS_PER_PUSH = 500;
 
 export class CollabClient {
@@ -21,6 +36,7 @@ export class CollabClient {
   /** @internal Exposed for testing only */
   _elements: Map<string, ExcalidrawElement> = new Map();
   private _connected = false;
+  // Stack of element ID arrays, one entry per draw_elements call, for undo
   private _history: string[][] = [];
   private _intentionalDisconnect = false;
   private _reconnectAttempts = 0;
@@ -53,6 +69,8 @@ export class CollabClient {
         transports: ["websocket"],
         timeout: CONNECT_TIMEOUT,
         extraHeaders: {
+          // The collab server rejects connections without a valid Origin header.
+          // This matches what the Excalidraw web app sends.
           Origin: "https://excalidraw.com",
         },
       }) as Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -72,6 +90,9 @@ export class CollabClient {
         resolve({ alone: true });
       });
 
+      // "room-user-change" fires both on initial join (when others are present)
+      // and on subsequent user joins/leaves. We only resolve the connect promise
+      // on the first occurrence.
       this._socket.on("room-user-change", (users: string[]) => {
         if (!this._connected) {
           clearTimeout(timer);
@@ -80,6 +101,7 @@ export class CollabClient {
         }
       });
 
+      // Inbound scene data from other collaborators (encrypted by the sender)
       this._socket.on(
         "client-broadcast",
         async (encryptedData: ArrayBuffer, iv: number[]) => {
@@ -117,6 +139,7 @@ export class CollabClient {
     });
   }
 
+  /** Clean shutdown — clears crypto cache and suppresses auto-reconnect. */
   disconnect(): void {
     this._intentionalDisconnect = true;
     if (this._reconnectTimer) {
@@ -147,12 +170,14 @@ export class CollabClient {
       );
     }
 
+    // Wrap in the same envelope format Excalidraw uses for scene diffs
     const payload = {
       type: "SCENE_UPDATE" as const,
       payload: { elements },
     };
 
     const { buffer, iv } = await encrypt(this._roomKey!, payload);
+    // "server-broadcast" tells the collab server to relay to all other clients
     this._socket!.emit("server-broadcast", this._roomId!, buffer, iv);
 
     for (const el of elements) {
@@ -226,6 +251,7 @@ export class CollabClient {
     await this.deleteElements(allIds);
   }
 
+  /** Exponential backoff reconnect: 1s, 2s, 4s, 8s, 16s then give up. */
   private _attemptReconnect(): void {
     if (
       this._reconnectAttempts >= CollabClient.MAX_RECONNECT_ATTEMPTS ||

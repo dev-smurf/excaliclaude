@@ -1,3 +1,11 @@
+/**
+ * Label construction for shapes and arrows.
+ *
+ * Shape labels are bound text elements (containerId links them to the parent).
+ * Arrow labels are standalone text positioned near the arrow's midpoint.
+ * Dark background detection auto-switches label color to white for readability.
+ */
+
 import { makeElement } from "./elements.js";
 import type { ExcalidrawElement, LinearElement } from "./types.js";
 
@@ -8,6 +16,7 @@ export interface LabelProps {
   y?: number;
 }
 
+/** Rough pixel dimensions for text — no DOM available, so we approximate. */
 export function estimateTextDimensions(
   text: string,
   fontSize: number
@@ -20,6 +29,7 @@ export function estimateTextDimensions(
   };
 }
 
+/** Only solid fills can obscure text — hachure/cross-hatch show through. */
 export function isDarkBackground(bg: string, fillStyle: string): boolean {
   if (bg === "transparent" || fillStyle !== "solid") return false;
 
@@ -68,6 +78,8 @@ export function buildShapeLabel(
     height,
   });
 
+  // Mutation here is intentional — we need to link the shape to its label
+  // before both are pushed to the collab server in the same batch.
   (
     shape as { boundElements: { id: string; type: string }[] | null }
   ).boundElements = [{ id: labelEl.id, type: "text" }];
@@ -75,6 +87,11 @@ export function buildShapeLabel(
   return labelEl;
 }
 
+/**
+ * Arrow labels are standalone text (not bound via containerId) because
+ * Excalidraw's bound-text on arrows has quirky positioning behavior.
+ * We place them adjacent to the arrow's midpoint instead.
+ */
 export function buildArrowLabel(
   arrow: ExcalidrawElement,
   label: LabelProps
@@ -104,6 +121,7 @@ export function buildArrowLabel(
     }
   }
 
+  // Gray text so arrow labels are visually secondary to shape labels
   return makeElement("text", {
     text: label.text,
     fontSize,

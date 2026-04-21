@@ -1,3 +1,11 @@
+/**
+ * MCP server exposing Excalidraw collaboration as tool calls.
+ *
+ * Each tool maps to a high-level drawing operation (draw, update, delete, etc.).
+ * A single CollabClient instance is shared across all tools — the LLM connects
+ * once and then issues drawing commands against that session.
+ */
+
 import crypto from "node:crypto";
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -10,6 +18,7 @@ import { buildShapeLabel, buildArrowLabel } from "./labels.js";
 import type { LabelProps } from "./labels.js";
 import type { ExcalidrawElement, TextElement } from "./types.js";
 
+/** Creates the MCP server and its backing CollabClient. Caller owns transport setup. */
 export function createServer(): { server: McpServer; client: CollabClient } {
   const server = new McpServer({
     name: "excaliclaude",
@@ -327,6 +336,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
 
           const { id: _id, ...changes } = upd;
 
+          // Excalidraw requires originalText to stay in sync with text
           if (
             (changes as Record<string, unknown>).text !== undefined &&
             existing.type === "text"

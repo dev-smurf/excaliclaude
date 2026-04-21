@@ -1,10 +1,19 @@
 #!/usr/bin/env node
 
+/**
+ * CLI entry point for excaliclaude.
+ *
+ * Two modes:
+ *   - `excaliclaude setup` — registers this server with Claude Code via `claude mcp add`
+ *   - `excaliclaude` (no args) — starts the MCP server on stdio (how Claude Code invokes it)
+ */
+
 import { execSync } from "node:child_process";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { createServer } from "../src/server.js";
 
+/** One-time setup: registers excaliclaude as a user-scoped MCP server in Claude Code. */
 async function setup(): Promise<void> {
   console.log("Setting up excaliclaude for Claude Code...\n");
 
@@ -28,6 +37,7 @@ async function setup(): Promise<void> {
   }
 }
 
+/** Normal mode: start MCP server on stdio for Claude Code to communicate with. */
 async function main(): Promise<void> {
   const { server } = createServer();
   const transport = new StdioServerTransport();

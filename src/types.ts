@@ -1,3 +1,11 @@
+/**
+ * Shared type definitions for Excalidraw elements and the collab protocol.
+ *
+ * These mirror the shapes Excalidraw uses internally. We only define the subset
+ * needed for the collab wire format — Excalidraw silently ignores unknown fields,
+ * so we don't need to be exhaustive.
+ */
+
 export type ElementType =
   | "rectangle"
   | "ellipse"
@@ -23,6 +31,7 @@ export interface BoundElement {
   type: "arrow" | "text";
 }
 
+/** Describes how an arrow endpoint snaps to a shape (fixedPoint is 0-1 normalized). */
 export interface ElementBinding {
   elementId: string;
   fixedPoint: [number, number];
@@ -50,6 +59,8 @@ export interface BaseElement {
   link: string | null;
   locked: boolean;
   isDeleted: boolean;
+  // seed, version, and versionNonce are used by Excalidraw's CRDT-like
+  // reconciliation to resolve conflicts between concurrent edits.
   seed: number;
   version: number;
   versionNonce: number;
@@ -60,6 +71,7 @@ export interface BaseElement {
 export interface TextElement extends BaseElement {
   type: "text";
   text: string;
+  // originalText is what the user typed; text may differ after auto-wrapping.
   originalText: string;
   fontSize: number;
   fontFamily: number;
@@ -67,11 +79,13 @@ export interface TextElement extends BaseElement {
   verticalAlign: VerticalAlign;
   lineHeight: number;
   autoResize: boolean;
+  // When set, this text is bound inside a shape (label). Null = standalone text.
   containerId: string | null;
 }
 
 export interface LinearElement extends BaseElement {
   type: "arrow" | "line";
+  // Points are relative to (x, y). First point is always [0, 0].
   points: [number, number][];
   startArrowhead: string | null;
   endArrowhead: string | null;
@@ -99,9 +113,11 @@ export type ExcalidrawElement =
   | FrameElement
   | ImageElement;
 
+// Loose prop bag used by makeElement() — callers pass arbitrary overrides.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type ElementProps = Record<string, any>;
 
+/** Parsed from the collab URL fragment: #room=<roomId>,<roomKey> */
 export interface RoomCoords {
   roomId: string;
   roomKey: string;
@@ -112,6 +128,7 @@ export interface EncryptResult {
   iv: Uint8Array;
 }
 
+/** Outcome of joining a room — either we're the first or others are present. */
 export type ConnectResult =
   | { alone: true }
   | { alone: false; users: number };
@@ -123,6 +140,10 @@ export interface BroadcastPayload {
   };
 }
 
+/**
+ * Socket.io events sent FROM the Excalidraw collab server TO us.
+ * The handshake flow: connect → init-room → join-room → first-in-room | room-user-change.
+ */
 export interface ServerToClientEvents {
   "init-room": () => void;
   "first-in-room": () => void;
@@ -136,6 +157,7 @@ export interface ServerToClientEvents {
   connect: () => void;
 }
 
+/** Socket.io events sent FROM us TO the Excalidraw collab server. */
 export interface ClientToServerEvents {
   "join-room": (roomId: string) => void;
   "server-broadcast": (
