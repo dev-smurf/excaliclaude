@@ -39,13 +39,15 @@ describe("createServer", () => {
   it("server has all expected tools", () => {
     const { server } = createServer();
     const tools = Object.keys((server as any)._registeredTools);
-    assert.ok(tools.includes("connect"));
-    assert.ok(tools.includes("draw_elements"));
-    assert.ok(tools.includes("update_elements"));
-    assert.ok(tools.includes("get_scene"));
-    assert.ok(tools.includes("delete_elements"));
-    assert.ok(tools.includes("clear_canvas"));
-    assert.ok(tools.includes("status"));
+    const expected = [
+      "connect", "draw_elements", "update_elements", "get_scene",
+      "group_elements", "delete_elements", "undo_last_draw",
+      "clear_canvas", "status",
+    ];
+    for (const name of expected) {
+      assert.ok(tools.includes(name), `missing tool: ${name}`);
+    }
+    assert.equal(tools.length, expected.length, "unexpected extra tools");
   });
 });
 

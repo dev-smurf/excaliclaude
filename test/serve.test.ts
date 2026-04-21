@@ -220,3 +220,80 @@ describe("HTTP server — startup", () => {
     controller.abort();
   });
 });
+
+// ── Session routing ──────────────────────────────────────────────────────────
+
+describe("HTTP server — session routing", () => {
+  let baseUrl: string;
+  let close: () => Promise<void>;
+
+  before(async () => {
+    const port = await getFreePort();
+    ({ close } = await createHttpMcpServer({ port }));
+    baseUrl = `http://localhost:${port}`;
+  });
+
+  after(async () => {
+    await close();
+  });
+
+  test("initialize returns mcp-session-id header", async () => {
+    const res = await postJson(baseUrl, INIT_PAYLOAD);
+    await res.body?.cancel();
+    assert.equal(res.status, 200);
+    const sessionId = res.headers.get("mcp-session-id");
+    assert.ok(sessionId, "response should include mcp-session-id header");
+  });
+
+  test("second initialize creates a new session", async () => {
+    const res1 = await postJson(baseUrl, INIT_PAYLOAD);
+    await res1.body?.cancel();
+    const session1 = res1.headers.get("mcp-session-id");
+
+    const res2 = await postJson(baseUrl, INIT_PAYLOAD);
+    await res2.body?.cancel();
+    const session2 = res2.headers.get("mcp-session-id");
+
+    assert.equal(res2.status, 200);
+    assert.ok(session1 && session2, "both should have session IDs");
+    assert.notEqual(session1, session2, "should be different sessions");
+  });
+
+  test("GET without session returns 400", async () => {
+    const res = await fetch(baseUrl);
+    const body = (await res.json()) as { jsonrpc: string; error: { code: number; message: string } };
+    assert.equal(res.status, 400);
+    assert.equal(body.error.message, "Bad Request: No active session");
+  });
+
+  test("GET with stale session ID returns 400", async () => {
+    // Initialize to create a session.
+    const initRes = await postJson(baseUrl, INIT_PAYLOAD);
+    await initRes.body?.cancel();
+
+    const res = await fetch(baseUrl, {
+      headers: { "mcp-session-id": "stale-nonexistent-id" },
+    });
+    const body = (await res.json()) as { jsonrpc: string; error: { code: number; message: string } };
+    assert.equal(res.status, 400);
+  });
+
+  test("POST with valid session routes to existing transport", async () => {
+    // Initialize to get a session.
+    const initRes = await postJson(baseUrl, INIT_PAYLOAD);
+    await initRes.body?.cancel();
+    const sessionId = initRes.headers.get("mcp-session-id")!;
+
+    // Send a tools/list request with the session ID.
+    const res = await postJson(
+      baseUrl,
+      { jsonrpc: "2.0", id: 2, method: "tools/list", params: {} },
+      { "mcp-session-id": sessionId, "mcp-protocol-version": "2024-11-05" }
+    );
+    const body = await res.text();
+    assert.equal(res.status, 200);
+    // The SSE response should contain tool names from our server.
+    assert.ok(body.includes("connect"), "should list connect tool");
+    assert.ok(body.includes("draw_elements"), "should list draw_elements tool");
+  });
+});

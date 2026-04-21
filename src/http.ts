@@ -61,10 +61,14 @@ export async function createHttpMcpServer(
   const openSockets = new Set<Socket>();
 
   const httpServer = createHttpServer(async (req, res) => {
-    // ── Bearer token auth ──────────────────────────────────────────────────
+    // ── Bearer token auth (constant-time comparison) ───────────────────────
     if (token) {
       const authHeader = req.headers["authorization"] ?? "";
-      if (authHeader !== `Bearer ${token}`) {
+      const expected = `Bearer ${token}`;
+      const isValid =
+        authHeader.length === expected.length &&
+        crypto.timingSafeEqual(Buffer.from(authHeader), Buffer.from(expected));
+      if (!isValid) {
         res.writeHead(401, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "Unauthorized" }));
         return;
@@ -121,7 +125,8 @@ export async function createHttpMcpServer(
   });
 
   await new Promise<void>((resolve, reject) => {
-    httpServer.listen(port, () => resolve());
+    // Bind to localhost only — external access should go through a tunnel (ngrok, etc.).
+    httpServer.listen(port, "127.0.0.1", () => resolve());
     httpServer.once("error", reject);
   });
 
