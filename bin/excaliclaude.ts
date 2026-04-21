@@ -87,7 +87,7 @@ async function serve(args: string[]): Promise<void> {
   console.log("\nExpose with ngrok:");
   console.log(`  ngrok http ${port}`);
   console.log(
-    "\nThen add the ngrok URL to: Claude.ai → Settings → Integrations → Add MCP server\n"
+    "\nThen add the ngrok URL to: Claude.ai → Customize → Connectors → Add custom connector\n"
   );
 
   process.on("SIGINT", () => {

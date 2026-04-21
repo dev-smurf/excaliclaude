@@ -87,28 +87,23 @@ ngrok http 3000
 
 **3. Add to Claude.ai**
 
-Go to **Settings → Integrations → Add MCP server** and paste the tunnel URL.
-
-If you set a token, add it as a Bearer header in the Claude.ai integration settings.
+Go to **Customize → Connectors → Add custom connector** and paste the tunnel URL. That's it — Claude.ai only takes a URL.
 
 <details>
-<summary><strong>Token configuration</strong></summary>
+<summary><strong>Token configuration (for non-Claude.ai clients)</strong></summary>
 
-The token can be set three ways (CLI flag takes precedence):
+Claude.ai only accepts a URL — it does not support custom auth headers. The `--token` option is for other HTTP clients (Cursor, scripts, etc.) that can send `Authorization: Bearer <token>`.
 
 ```bash
-# 1. CLI flag
+# CLI flag
 npx excaliclaude serve --token my-secret
 
-# 2. Environment variable
+# Environment variable
 export EXCALICLAUDE_TOKEN=my-secret
-npx excaliclaude serve
-
-# 3. No token — only safe without a public tunnel
 npx excaliclaude serve
 ```
 
-Without a token, anyone who discovers the tunnel URL can call your tools. Always set a token when using a public tunnel.
+For Claude.ai, the ngrok URL is your only access control — close the tunnel when done.
 
 </details>
 
