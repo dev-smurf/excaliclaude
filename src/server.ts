@@ -16,7 +16,108 @@ import { makeElement } from "./elements.js";
 import { parseCollabUrl } from "./url.js";
 import { buildShapeLabel, buildArrowLabel } from "./labels.js";
 import type { LabelProps } from "./labels.js";
-import type { ExcalidrawElement, TextElement } from "./types.js";
+import type { ExcalidrawElement, LinearElement, TextElement } from "./types.js";
+
+// ── Spatial helpers ────────────────────────────────────────────────────────
+
+interface BBox {
+  id: string;
+  type: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text?: string;
+}
+
+/** Build a bounding box list from visible elements, skipping bound labels and arrows/lines. */
+function collectBBoxes(elements: ExcalidrawElement[]): BBox[] {
+  return elements
+    .filter((el) => {
+      // Skip bound text labels (they intentionally overlap their container)
+      if (el.type === "text" && (el as TextElement).containerId) return false;
+      // Skip arrows and lines (they naturally cross over shapes)
+      if (el.type === "arrow" || el.type === "line") return false;
+      // Skip zero-size elements
+      if (el.width === 0 && el.height === 0) return false;
+      return true;
+    })
+    .map((el) => ({
+      id: el.id,
+      type: el.type,
+      x: el.x,
+      y: el.y,
+      w: el.width,
+      h: el.height,
+      text: (el as TextElement).text,
+    }));
+}
+
+/** Axis-aligned bounding box intersection test with a small tolerance. */
+function boxesOverlap(a: BBox, b: BBox, tolerance = 4): boolean {
+  return (
+    a.x < b.x + b.w - tolerance &&
+    a.x + a.w > b.x + tolerance &&
+    a.y < b.y + b.h - tolerance &&
+    a.y + a.h > b.y + tolerance
+  );
+}
+
+interface OverlapPair {
+  a: string; // id or short label
+  b: string;
+}
+
+/** Find all overlapping element pairs from a set of bounding boxes. */
+function findOverlaps(boxes: BBox[]): OverlapPair[] {
+  const overlaps: OverlapPair[] = [];
+  for (let i = 0; i < boxes.length; i++) {
+    for (let j = i + 1; j < boxes.length; j++) {
+      if (boxesOverlap(boxes[i]!, boxes[j]!)) {
+        const label = (b: BBox) => {
+          if (b.text) return `${b.type} "${b.text.slice(0, 15)}"`;
+          return `${b.type} (${b.id.slice(0, 8)})`;
+        };
+        overlaps.push({ a: label(boxes[i]!), b: label(boxes[j]!) });
+      }
+    }
+  }
+  return overlaps;
+}
+
+/** Compute canvas bounds and overlap warnings for all visible elements. */
+function buildSpatialSummary(elements: ExcalidrawElement[]): string {
+  if (elements.length === 0) return "";
+
+  const boxes = collectBBoxes(elements);
+  const parts: string[] = [];
+
+  // Canvas bounds
+  if (boxes.length > 0) {
+    const minX = Math.min(...boxes.map((b) => b.x));
+    const minY = Math.min(...boxes.map((b) => b.y));
+    const maxX = Math.max(...boxes.map((b) => b.x + b.w));
+    const maxY = Math.max(...boxes.map((b) => b.y + b.h));
+    parts.push(`Canvas bounds: (${Math.round(minX)}, ${Math.round(minY)}) to (${Math.round(maxX)}, ${Math.round(maxY)})`);
+  }
+
+  // Overlap warnings
+  const overlaps = findOverlaps(boxes);
+  if (overlaps.length > 0) {
+    const lines = overlaps.slice(0, 10).map((o) => `  - ${o.a} overlaps ${o.b}`);
+    parts.push(`OVERLAPS DETECTED (${overlaps.length}):\n${lines.join("\n")}`);
+  }
+
+  // Unbound arrows
+  const arrows = elements.filter((el): el is LinearElement =>
+    el.type === "arrow" && !(el as LinearElement).startBinding && !(el as LinearElement).endBinding
+  );
+  if (arrows.length > 0) {
+    parts.push(`UNBOUND ARROWS (${arrows.length}): ${arrows.map((a) => a.id.slice(0, 8)).join(", ")} — these arrows are not connected to any shape. Use startBinding/endBinding to attach them.`);
+  }
+
+  return parts.join("\n");
+}
 
 /**
  * Creates the MCP server and its backing CollabClient. Caller owns transport setup.
@@ -113,13 +214,18 @@ ELBOWED ARROWS (auto-routed right-angle paths):
 - Elbowed arrows REQUIRE at least one binding (startBinding or endBinding). Without a binding they render as straight lines.
 - When using elbowed arrows, set points to just [[0,0], [dx,dy]] (start and end). Excalidraw computes the intermediate waypoints.
 
-LAYOUT RULES:
-1. PLAN BEFORE DRAWING: Calculate positions for every element FIRST. Never place elements without considering the full picture.
-2. SPACING: Leave at least 80px horizontal gap between shapes for arrows + labels. At least 120px vertical gap between rows.
-3. NO OVERLAP: Before placing ANY element, verify its bounding box does not intersect with any existing element.
-4. USE get_scene FIRST when adding to an existing canvas to see current positions.
-5. TEXT: The server estimates text dimensions. Keep text concise. Multi-line text uses \\n. Use textAlign: "center" for centered annotations.
-6. DARK CONTAINERS: The server auto-detects dark backgrounds and sets white text for labels.`,
+WORKFLOW (follow every time):
+1. CALL get_scene FIRST to see all current elements, their positions, and any existing overlaps.
+2. PLAN THE FULL LAYOUT before drawing anything. Calculate x, y, width, height for every element. Account for text length — longer text needs wider/taller boxes.
+3. CHECK FOR COLLISIONS: For each new element, verify its bounding box (x, y, x+width, y+height) does not intersect any existing element.
+4. IF RESIZING: When a box grows, shift all elements to its right/below to maintain spacing. Never resize in isolation.
+5. DRAW EVERYTHING IN ONE CALL: Shapes + arrows + labels together, using pre-assigned IDs for bindings.
+
+SPACING: At least 80px horizontal gap between shapes, 120px vertical gap between rows.
+TEXT: Server estimates dimensions. Keep text concise. Multi-line uses \\n. Use textAlign: "center" for centered text.
+DARK CONTAINERS: Server auto-detects dark backgrounds and uses white text for labels.
+
+The response includes overlap warnings and unbound arrow alerts — fix any issues before proceeding.`,
       inputSchema: {
         elements: z
           .array(
@@ -250,11 +356,16 @@ LAYOUT RULES:
           })
           .join(", ");
 
+        // Post-draw spatial check across ALL canvas elements
+        const spatial = buildSpatialSummary(client.getElements());
+        const response = `Drew ${builtElements.length} elements: ${summary}` +
+          (spatial ? `\n\n${spatial}` : "");
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `Drew ${builtElements.length} elements: ${summary}`,
+              text: response,
             },
           ],
         };
@@ -277,7 +388,7 @@ LAYOUT RULES:
     {
       title: "Get Excalidraw scene",
       description:
-        "Get all non-deleted elements on the canvas. By default returns compact view (id, type, x, y, width, height, text). Set full=true to get all properties including strokeColor, backgroundColor, fillStyle, points, etc. Call this BEFORE draw_elements or update_elements when adding to an existing canvas.",
+        "Get all non-deleted elements on the canvas. ALWAYS call this BEFORE draw_elements or update_elements to understand the current layout.\n\nCompact view (default) returns: id, type, x, y, width, height, text, boundElements, plus a spatial summary with canvas bounds, overlap warnings, and unbound arrows. Use this data to plan element placement and avoid collisions.\n\nSet full=true for all properties including strokeColor, backgroundColor, fillStyle, points, bindings, etc.",
       inputSchema: {
         full: z
           .boolean()
@@ -291,33 +402,37 @@ LAYOUT RULES:
     async ({ full }: { full: boolean }) => {
       try {
         const elements = client.getElements();
+        const compactElements = elements.map((el) => {
+          const compact: Record<string, unknown> = {
+            id: el.id,
+            type: el.type,
+            x: el.x,
+            y: el.y,
+            width: el.width,
+            height: el.height,
+          };
+          if ((el as TextElement).text !== undefined) {
+            compact.text = (el as TextElement).text;
+          }
+          if (el.boundElements && el.boundElements.length > 0) {
+            compact.boundElements = el.boundElements;
+          }
+          return compact;
+        });
+
         const data = full
           ? { count: elements.length, elements }
-          : {
-              count: elements.length,
-              elements: elements.map((el) => {
-                const compact: Record<string, unknown> = {
-                  id: el.id,
-                  type: el.type,
-                  x: el.x,
-                  y: el.y,
-                  width: el.width,
-                  height: el.height,
-                };
-                if ((el as TextElement).text !== undefined) {
-                  compact.text = (el as TextElement).text;
-                }
-                if (el.boundElements && el.boundElements.length > 0) {
-                  compact.boundElements = el.boundElements;
-                }
-                return compact;
-              }),
-            };
+          : { count: elements.length, elements: compactElements };
+
+        const spatial = full ? "" : buildSpatialSummary(elements);
+        const response = JSON.stringify(data, null, 2) +
+          (spatial ? `\n\n${spatial}` : "");
+
         return {
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(data, null, 2),
+              text: response,
             },
           ],
         };
@@ -340,7 +455,7 @@ LAYOUT RULES:
     {
       title: "Update Excalidraw elements",
       description:
-        "Update existing elements on the canvas by ID. Use this to move, resize, restyle, or change text of existing elements instead of deleting and recreating them. Only provide the properties you want to change — all other properties are preserved. Prefer update_elements over delete + draw: deleting and redrawing creates new IDs and severs any arrow bindings to the element. Call get_scene first to obtain element IDs.",
+        "Update existing elements on the canvas by ID. Use this to move, resize, restyle, or change text of existing elements instead of deleting and recreating them. Only provide the properties you want to change — all other properties are preserved.\n\nIMPORTANT: When resizing or moving an element, check if adjacent elements or bound arrows need to move too. Use get_scene first to see the full layout, then cascade changes to maintain proper spacing and avoid overlaps.\n\nPrefer update_elements over delete + draw: deleting and redrawing creates new IDs and severs arrow bindings.",
       inputSchema: {
         updates: z
           .array(
@@ -413,9 +528,11 @@ LAYOUT RULES:
           await client.pushElements(updatedElements);
         }
 
+        const spatial = buildSpatialSummary(client.getElements());
         const msg =
           `Updated ${updatedElements.length} elements.` +
-          (notFound > 0 ? ` ${notFound} not found.` : "");
+          (notFound > 0 ? ` ${notFound} not found.` : "") +
+          (spatial ? `\n\n${spatial}` : "");
 
         return { content: [{ type: "text" as const, text: msg }] };
       } catch (err) {
