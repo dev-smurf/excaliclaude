@@ -48,6 +48,11 @@ export class CollabClient {
     return this._connected && this._socket?.connected === true;
   }
 
+  /** Returns the current room ID, or null if not connected. */
+  get roomId(): string | null {
+    return this._roomId;
+  }
+
   async connect(roomId: string, roomKey: string): Promise<ConnectResult> {
     if (this._socket) {
       this.disconnect();

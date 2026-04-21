@@ -49,11 +49,26 @@ export function createServer(existingClient?: CollabClient): { server: McpServer
     },
     async ({ url }: { url: string }) => {
       try {
+        const { roomId, roomKey } = parseCollabUrl(url);
+
+        // Already connected to this room — skip reconnection to preserve
+        // element cache, undo history, and avoid socket churn.
+        if (client.isConnected() && client.roomId === roomId) {
+          const count = client.elementCount();
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: `Already connected to room ${roomId.slice(0, 8)}... (${count} elements on canvas)`,
+              },
+            ],
+          };
+        }
+
         if (client.isConnected()) {
           client.disconnect();
         }
 
-        const { roomId, roomKey } = parseCollabUrl(url);
         const result = await client.connect(roomId, roomKey);
 
         return {
@@ -82,35 +97,39 @@ export function createServer(existingClient?: CollabClient): { server: McpServer
     "draw_elements",
     {
       title: "Draw on Excalidraw",
-      description: `Draw elements on the connected Excalidraw canvas. Supports rectangle, ellipse, diamond, text, arrow, line.
+      description: `Draw elements on the connected Excalidraw canvas. Supports rectangle, ellipse, diamond, text, arrow, line, frame, image.
 
-LAYOUT RULES (CRITICAL — follow these every time):
+BINDINGS (connect arrows to shapes):
+- Set startBinding/endBinding on arrows with { elementId, fixedPoint }.
+- fixedPoint is [x, y] normalized 0-1 on the target shape: [0.5, 0] = top center, [0.5, 1] = bottom center, [0, 0.5] = left center, [1, 0.5] = right center.
+- The target shape MUST exist (already on canvas or drawn in the same call with a pre-assigned id).
 
-1. PLAN BEFORE DRAWING: Before calling this tool, mentally map out the full layout. Calculate positions for every element, annotation, and arrow FIRST. Never place elements without considering the full picture.
+PRE-ASSIGNED IDs:
+- Set "id" on any element to choose its ID. Then reference that ID in arrow bindings within the same call.
+- Example: draw a rectangle with id:"box1", then an arrow with endBinding: { elementId:"box1", fixedPoint:[0.5,0] }.
 
-2. SPACING: Leave at least 80px horizontal gap between shapes for arrows + labels. Leave at least 120px vertical gap between rows for annotations. Annotations go BELOW their screen in a dedicated zone — never in the arrow corridor.
+ELBOWED ARROWS (auto-routed right-angle paths):
+- Set elbowed: true on arrows. Excalidraw auto-routes them with 90° turns around obstacles.
+- Elbowed arrows REQUIRE at least one binding (startBinding or endBinding). Without a binding they render as straight lines.
+- When using elbowed arrows, set points to just [[0,0], [dx,dy]] (start and end). Excalidraw computes the intermediate waypoints.
 
-3. ARROWS MUST NEVER OVERLAP CONTENT: Before drawing any arrow, check what elements exist between the start and end points. If anything is in the path, route the arrow around it using multi-point paths with 90-degree turns: points: [[0,0], [dx,0], [dx,dy]] for L-shapes, or [[0,0], [dx,0], [dx,dy], [dx2,dy]] for Z-shapes. Use as many segments as needed.
-
-4. LABELS ON ARROWS: Arrow labels are standalone text (not bound). Place them adjacent to the arrow in empty space — above for horizontal arrows, beside for vertical arrows. Never on top of the arrow line or other content.
-
-5. TEXT IN DARK CONTAINERS: The server auto-detects dark backgrounds and sets white text. But verify visually — if backgroundColor is dark and fillStyle is "solid", the label will be white.
-
-6. USE get_scene FIRST: When adding to an existing canvas, ALWAYS call get_scene first to see current element positions. Then calculate new positions that avoid all existing content.
-
-7. RESPONSIVE ROUTING: If the best path for an arrow would overlap content, consider: (a) routing the arrow with extra waypoints, (b) repositioning the annotation text, or (c) adding more spacing. Choose whichever produces the cleanest result.
-
-8. TEXT DIMENSIONS: Text elements need width/height for proper rendering. The server estimates these, but keep text concise to avoid overflow. Multi-line text uses \\n.
-
-9. STANDALONE TEXT NEAR ARROWS: When placing text elements near arrows manually (not using the label property), position them at least 10px ABOVE horizontal arrows or 12px to the RIGHT of vertical arrows. Never at the same y-coordinate as a horizontal arrow or the same x-coordinate as a vertical arrow — the text will visually overlap the arrow line.
-
-10. NO ELEMENT OVERLAP EVER: Before placing ANY element, verify its bounding box (x, y, width, height) does not intersect with any existing element. If it would overlap, move it to clear space. This applies to text, shapes, arrows — everything.
-
-11. CENTER TEXT PROPERLY: For annotation text below shapes (titles, descriptions), ALWAYS use textAlign: "center" and set width equal to the shape's width and x equal to the shape's x. This ensures Excalidraw centers the text visually regardless of width estimation. For standalone text inside phone mockups or UI elements, also use textAlign: "center". Never rely on manual x-offset calculations for centering — use textAlign instead.`,
+LAYOUT RULES:
+1. PLAN BEFORE DRAWING: Calculate positions for every element FIRST. Never place elements without considering the full picture.
+2. SPACING: Leave at least 80px horizontal gap between shapes for arrows + labels. At least 120px vertical gap between rows.
+3. NO OVERLAP: Before placing ANY element, verify its bounding box does not intersect with any existing element.
+4. USE get_scene FIRST when adding to an existing canvas to see current positions.
+5. TEXT: The server estimates text dimensions. Keep text concise. Multi-line text uses \\n. Use textAlign: "center" for centered annotations.
+6. DARK CONTAINERS: The server auto-detects dark backgrounds and sets white text for labels.`,
       inputSchema: {
         elements: z
           .array(
             z.object({
+              id: z
+                .string()
+                .optional()
+                .describe(
+                  "Optional pre-assigned ID. Set this so arrows can reference shapes drawn in the same call via startBinding/endBinding."
+                ),
               type: z.enum([
                 "rectangle",
                 "ellipse",
@@ -159,6 +178,12 @@ LAYOUT RULES (CRITICAL — follow these every time):
                 })
                 .nullable()
                 .optional(),
+              elbowed: z
+                .boolean()
+                .optional()
+                .describe(
+                  "Set true for auto-routed right-angle arrows. Requires at least one binding."
+                ),
               label: z
                 .object({
                   text: z.string(),
@@ -213,11 +238,23 @@ LAYOUT RULES (CRITICAL — follow these every time):
 
         await client.pushElements(builtElements);
 
+        const summary = builtElements
+          .map((el) => {
+            const tag = el.type === "text" && (el as TextElement).containerId
+              ? "label"
+              : el.type;
+            const name = (el as TextElement).text
+              ? ` "${(el as TextElement).text.slice(0, 20)}"`
+              : "";
+            return `${tag}${name} (${el.id})`;
+          })
+          .join(", ");
+
         return {
           content: [
             {
               type: "text" as const,
-              text: `Drew ${builtElements.length} elements on the canvas.`,
+              text: `Drew ${builtElements.length} elements: ${summary}`,
             },
           ],
         };
@@ -258,15 +295,23 @@ LAYOUT RULES (CRITICAL — follow these every time):
           ? { count: elements.length, elements }
           : {
               count: elements.length,
-              elements: elements.map((el) => ({
-                id: el.id,
-                type: el.type,
-                x: el.x,
-                y: el.y,
-                width: el.width,
-                height: el.height,
-                text: (el as TextElement).text,
-              })),
+              elements: elements.map((el) => {
+                const compact: Record<string, unknown> = {
+                  id: el.id,
+                  type: el.type,
+                  x: el.x,
+                  y: el.y,
+                  width: el.width,
+                  height: el.height,
+                };
+                if ((el as TextElement).text !== undefined) {
+                  compact.text = (el as TextElement).text;
+                }
+                if (el.boundElements && el.boundElements.length > 0) {
+                  compact.boundElements = el.boundElements;
+                }
+                return compact;
+              }),
             };
         return {
           content: [
