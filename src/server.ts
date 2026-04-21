@@ -207,32 +207,39 @@ LAYOUT RULES (CRITICAL — follow these every time):
     {
       title: "Get Excalidraw scene",
       description:
-        "Get all non-deleted elements on the canvas. Returns JSON with 'count' (integer) and 'elements' (array of {id, type, x, y, width, height, text}). Call this BEFORE draw_elements or update_elements when adding to an existing canvas — you need current positions and IDs to avoid overlaps and to target updates.",
-      inputSchema: {},
+        "Get all non-deleted elements on the canvas. By default returns compact view (id, type, x, y, width, height, text). Set full=true to get all properties including strokeColor, backgroundColor, fillStyle, points, etc. Call this BEFORE draw_elements or update_elements when adding to an existing canvas.",
+      inputSchema: {
+        full: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe(
+            "Return full element data (all properties) instead of compact view"
+          ),
+      },
     },
-    async () => {
+    async ({ full }: { full: boolean }) => {
       try {
         const elements = client.getElements();
+        const data = full
+          ? { count: elements.length, elements }
+          : {
+              count: elements.length,
+              elements: elements.map((el) => ({
+                id: el.id,
+                type: el.type,
+                x: el.x,
+                y: el.y,
+                width: el.width,
+                height: el.height,
+                text: (el as TextElement).text,
+              })),
+            };
         return {
           content: [
             {
               type: "text" as const,
-              text: JSON.stringify(
-                {
-                  count: elements.length,
-                  elements: elements.map((el) => ({
-                    id: el.id,
-                    type: el.type,
-                    x: el.x,
-                    y: el.y,
-                    width: el.width,
-                    height: el.height,
-                    text: (el as TextElement).text,
-                  })),
-                },
-                null,
-                2
-              ),
+              text: JSON.stringify(data, null, 2),
             },
           ],
         };

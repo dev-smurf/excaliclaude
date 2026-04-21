@@ -131,6 +131,47 @@ describe("get_scene handler", () => {
     assert.equal(data.count, 1);
     assert.equal(data.elements[0].id, "a");
   });
+
+  it("returns full element data when full=true", async () => {
+    const { server, client } = createServer();
+    client._elements.set("r1", {
+      id: "r1",
+      type: "rectangle",
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 50,
+      strokeColor: "#ff0000",
+      backgroundColor: "#a5d8ff",
+      fillStyle: "solid",
+      isDeleted: false,
+    } as unknown as ExcalidrawElement);
+    const handler = (server as any)._registeredTools.get_scene;
+    const result = await handler.handler({ full: true });
+    const data = JSON.parse(result.content[0].text);
+    assert.equal(data.count, 1);
+    assert.equal(data.elements[0].strokeColor, "#ff0000");
+    assert.equal(data.elements[0].backgroundColor, "#a5d8ff");
+  });
+
+  it("returns compact data when full=false", async () => {
+    const { server, client } = createServer();
+    client._elements.set("r1", {
+      id: "r1",
+      type: "rectangle",
+      x: 10,
+      y: 20,
+      width: 100,
+      height: 50,
+      strokeColor: "#ff0000",
+      isDeleted: false,
+    } as unknown as ExcalidrawElement);
+    const handler = (server as any)._registeredTools.get_scene;
+    const result = await handler.handler({ full: false });
+    const data = JSON.parse(result.content[0].text);
+    assert.equal(data.elements[0].strokeColor, undefined);
+    assert.equal(data.elements[0].id, "r1");
+  });
 });
 
 describe("update_elements handler", () => {
