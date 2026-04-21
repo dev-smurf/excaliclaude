@@ -129,14 +129,23 @@ function createServer() {
           const built = makeElement(el.type, el);
 
           if (el.label && ["rectangle", "ellipse", "diamond"].includes(el.type)) {
+            const labelFontSize = el.label.fontSize || 16;
+            const labelText = el.label.text;
+            const labelLines = labelText.split("\n");
+            const maxLineLen = Math.max(...labelLines.map((l) => l.length));
+            const labelWidth = Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
+            const labelHeight = Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
+
             const labelEl = makeElement("text", {
-              text: el.label.text,
-              fontSize: el.label.fontSize || 16,
+              text: labelText,
+              fontSize: labelFontSize,
               textAlign: "center",
               verticalAlign: "middle",
               containerId: built.id,
-              x: built.x,
-              y: built.y,
+              x: built.x + (built.width - labelWidth) / 2,
+              y: built.y + (built.height - labelHeight) / 2,
+              width: labelWidth,
+              height: labelHeight,
             });
             built.boundElements = [{ id: labelEl.id, type: "text" }];
             builtElements.push(built, labelEl);
