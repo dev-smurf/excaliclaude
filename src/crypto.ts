@@ -4,12 +4,21 @@ import type { EncryptResult } from "./types.js";
 
 const crypto = webcrypto as unknown as Crypto;
 const IV_LENGTH = 12;
+const encoder = new TextEncoder();
+const decoder = new TextDecoder();
 
-async function importKey(
+// Cache imported CryptoKeys to avoid re-importing on every call
+const keyCache = new Map<string, CryptoKey>();
+
+async function getKey(
   keyString: string,
   usage: "encrypt" | "decrypt"
 ): Promise<CryptoKey> {
-  return crypto.subtle.importKey(
+  const cacheKey = `${keyString}:${usage}`;
+  const cached = keyCache.get(cacheKey);
+  if (cached) return cached;
+
+  const cryptoKey = await crypto.subtle.importKey(
     "jwk",
     {
       alg: "A128GCM",
@@ -22,6 +31,13 @@ async function importKey(
     false,
     [usage]
   );
+
+  keyCache.set(cacheKey, cryptoKey);
+  return cryptoKey;
+}
+
+export function clearKeyCache(): void {
+  keyCache.clear();
 }
 
 export async function encrypt(
@@ -29,8 +45,8 @@ export async function encrypt(
   data: unknown
 ): Promise<EncryptResult> {
   const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
-  const cryptoKey = await importKey(keyString, "encrypt");
-  const encoded = new TextEncoder().encode(JSON.stringify(data));
+  const cryptoKey = await getKey(keyString, "encrypt");
+  const encoded = encoder.encode(JSON.stringify(data));
 
   const buffer = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv },
@@ -46,7 +62,7 @@ export async function decrypt(
   buffer: ArrayBuffer,
   iv: Uint8Array
 ): Promise<unknown> {
-  const cryptoKey = await importKey(keyString, "decrypt");
+  const cryptoKey = await getKey(keyString, "decrypt");
 
   const decrypted = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: iv as Uint8Array<ArrayBuffer> },
@@ -54,5 +70,5 @@ export async function decrypt(
     buffer
   );
 
-  return JSON.parse(new TextDecoder().decode(decrypted)) as unknown;
+  return JSON.parse(decoder.decode(decrypted)) as unknown;
 }

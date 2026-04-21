@@ -1,6 +1,6 @@
 import { io, Socket } from "socket.io-client";
 
-import { encrypt, decrypt } from "./crypto.js";
+import { encrypt, decrypt, clearKeyCache } from "./crypto.js";
 import type {
   BroadcastPayload,
   ClientToServerEvents,
@@ -14,11 +14,13 @@ const CONNECT_TIMEOUT = 15000;
 export const MAX_ELEMENTS_PER_PUSH = 500;
 
 export class CollabClient {
-  _socket: Socket<ServerToClientEvents, ClientToServerEvents> | null = null;
-  _roomId: string | null = null;
-  _roomKey: string | null = null;
+  private _socket: Socket<ServerToClientEvents, ClientToServerEvents> | null =
+    null;
+  private _roomId: string | null = null;
+  private _roomKey: string | null = null;
+  /** @internal Exposed for testing only */
   _elements: Map<string, ExcalidrawElement> = new Map();
-  _connected = false;
+  private _connected = false;
 
   isConnected(): boolean {
     return this._connected && this._socket?.connected === true;
@@ -85,7 +87,11 @@ export class CollabClient {
               (data.type === "SCENE_INIT" || data.type === "SCENE_UPDATE")
             ) {
               for (const el of data.payload.elements) {
-                this._elements.set(el.id, el);
+                if (el.isDeleted) {
+                  this._elements.delete(el.id);
+                } else {
+                  this._elements.set(el.id, el);
+                }
               }
             }
           } catch {
@@ -106,6 +112,7 @@ export class CollabClient {
       this._socket = null;
     }
     this._connected = false;
+    clearKeyCache();
     this._roomId = null;
     this._roomKey = null;
   }
@@ -138,6 +145,19 @@ export class CollabClient {
 
   getElements(): ExcalidrawElement[] {
     return Array.from(this._elements.values()).filter((el) => !el.isDeleted);
+  }
+
+  getElementById(id: string): ExcalidrawElement | undefined {
+    const el = this._elements.get(id);
+    return el?.isDeleted ? undefined : el;
+  }
+
+  elementCount(): number {
+    let count = 0;
+    for (const el of this._elements.values()) {
+      if (!el.isDeleted) count++;
+    }
+    return count;
   }
 
   async deleteElements(ids: string[]): Promise<void> {

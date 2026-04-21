@@ -4,6 +4,8 @@ import { z } from "zod";
 import { CollabClient } from "./collab.js";
 import { makeElement } from "./elements.js";
 import { parseCollabUrl } from "./url.js";
+import { buildShapeLabel, buildArrowLabel } from "./labels.js";
+import type { LabelProps } from "./labels.js";
 import type { ExcalidrawElement, TextElement } from "./types.js";
 
 export function createServer(): { server: McpServer; client: CollabClient } {
@@ -81,7 +83,12 @@ LAYOUT RULES (CRITICAL — follow these every time):
 
 7. RESPONSIVE ROUTING: If the best path for an arrow would overlap content, consider: (a) routing the arrow with extra waypoints, (b) repositioning the annotation text, or (c) adding more spacing. Choose whichever produces the cleanest result.
 
-8. TEXT DIMENSIONS: Text elements need width/height for proper rendering. The server estimates these, but keep text concise to avoid overflow. Multi-line text uses \\n.`,
+8. TEXT DIMENSIONS: Text elements need width/height for proper rendering. The server estimates these, but keep text concise to avoid overflow. Multi-line text uses \\n.
+
+9. STANDALONE TEXT NEAR ARROWS: When placing text elements near arrows manually (not using the label property), position them at least 10px ABOVE horizontal arrows or 12px to the RIGHT of vertical arrows. Never at the same y-coordinate as a horizontal arrow or the same x-coordinate as a vertical arrow — the text will visually overlap the arrow line.
+
+10. NO ELEMENT OVERLAP EVER: Before placing ANY element, verify its bounding box (x, y, width, height) does not intersect with any existing element. If it would overlap, move it to clear space. This applies to text, shapes, arrows — everything.
+`,
       inputSchema: {
         elements: z
           .array(
@@ -158,105 +165,13 @@ LAYOUT RULES (CRITICAL — follow these every time):
             el as Record<string, unknown>
           );
 
-          const label = el.label as
-            | { text: string; fontSize?: number; x?: number; y?: number }
-            | undefined;
+          const label = el.label as LabelProps | undefined;
 
-          if (
-            label &&
-            ["rectangle", "ellipse", "diamond"].includes(elType)
-          ) {
-            const labelFontSize = label.fontSize || 16;
-            const labelText = label.text;
-            const labelLines = labelText.split("\n");
-            const maxLineLen = Math.max(...labelLines.map((l) => l.length));
-            const labelWidth =
-              Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
-            const labelHeight =
-              Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
-
-            // Auto white text on dark backgrounds (perceptual luminance)
-            const bg = (built.backgroundColor || "transparent") as string;
-            const isDarkBg = (() => {
-              if (bg === "transparent" || built.fillStyle !== "solid")
-                return false;
-              const m = bg.match(
-                /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i
-              );
-              if (!m) return false;
-              const [r, g, b] = [
-                parseInt(m[1]!, 16),
-                parseInt(m[2]!, 16),
-                parseInt(m[3]!, 16),
-              ];
-              return 0.2126 * r + 0.7152 * g + 0.0722 * b < 128;
-            })();
-            const labelColor = isDarkBg ? "#ffffff" : "#1e1e1e";
-
-            const labelX = built.x + (built.width - labelWidth) / 2;
-            const labelY = built.y + (built.height - labelHeight) / 2;
-
-            const labelEl = makeElement("text", {
-              text: labelText,
-              fontSize: labelFontSize,
-              strokeColor: labelColor,
-              textAlign: "center" as const,
-              verticalAlign: "middle" as const,
-              containerId: built.id,
-              x: labelX,
-              y: labelY,
-              width: labelWidth,
-              height: labelHeight,
-            });
-            (built as { boundElements: { id: string; type: string }[] | null }).boundElements = [
-              { id: labelEl.id, type: "text" },
-            ];
+          if (label && ["rectangle", "ellipse", "diamond"].includes(elType)) {
+            const labelEl = buildShapeLabel(built, label);
             builtElements.push(built, labelEl);
-          } else if (
-            label &&
-            (elType === "arrow" || elType === "line")
-          ) {
-            const labelFontSize = label.fontSize || 12;
-            const labelText = label.text;
-            const labelLines = labelText.split("\n");
-            const maxLineLen = Math.max(...labelLines.map((l) => l.length));
-            const labelWidth =
-              Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
-            const labelHeight =
-              Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
-
-            let labelX: number;
-            let labelY: number;
-            if (label.x !== undefined && label.y !== undefined) {
-              labelX = label.x;
-              labelY = label.y;
-            } else {
-              const points = (built as { points: [number, number][] }).points || [
-                [0, 0],
-              ];
-              const lastPt = points[points.length - 1]!;
-              const isHorizontal = Math.abs(lastPt[0]) >= Math.abs(lastPt[1]);
-
-              if (isHorizontal) {
-                const midX = built.x + lastPt[0] / 2;
-                labelX = midX - labelWidth / 2;
-                labelY = built.y - labelHeight - 4;
-              } else {
-                const midY = built.y + lastPt[1] / 2;
-                labelX = built.x + 8;
-                labelY = midY - labelHeight / 2;
-              }
-            }
-
-            const labelEl = makeElement("text", {
-              text: labelText,
-              fontSize: labelFontSize,
-              strokeColor: "#888888",
-              x: labelX,
-              y: labelY,
-              width: labelWidth,
-              height: labelHeight,
-            });
+          } else if (label && (elType === "arrow" || elType === "line")) {
+            const labelEl = buildArrowLabel(built, label);
             builtElements.push(built, labelEl);
           } else {
             builtElements.push(built);
@@ -380,9 +295,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
         let notFound = 0;
 
         for (const upd of updates) {
-          const existing = client
-            .getElements()
-            .find((el) => el.id === upd.id);
+          const existing = client.getElementById(upd.id);
           if (!existing) {
             notFound++;
             continue;
@@ -448,9 +361,9 @@ LAYOUT RULES (CRITICAL — follow these every time):
     },
     async ({ ids }: { ids: string[] }) => {
       try {
-        const before = client.getElements().length;
+        const before = client.elementCount();
         await client.deleteElements(ids);
-        const after = client.getElements().length;
+        const after = client.elementCount();
         const actuallyDeleted = before - after;
         return {
           content: [

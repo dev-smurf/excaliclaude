@@ -42,25 +42,22 @@ Claude connects to the Excalidraw collaboration server using the native protocol
 
 ## Install
 
+### <img src="https://img.shields.io/badge/Claude_Code-E07C4C?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code"> &nbsp; one command
+
 ```bash
-npm install -g excaliclaude
+npx excaliclaude setup
 ```
 
-<br>
+That's it. Restart Claude Code and you're ready.
 
-### <img src="https://img.shields.io/badge/Claude_Code-E07C4C?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code"> &nbsp; recommended
+<details>
+<summary>Manual setup</summary>
 
-Add to `~/.claude.json`:
-
-```json
-{
-  "mcpServers": {
-    "excaliclaude": {
-      "command": "excaliclaude"
-    }
-  }
-}
+```bash
+claude mcp add -s user excaliclaude -- npx -y excaliclaude
 ```
+
+</details>
 
 <br>
 
@@ -85,7 +82,7 @@ Add to `~/.claude.json`:
 ```bash
 git clone https://github.com/dev-smurf/excaliclaude.git
 cd excaliclaude
-npm install
+npm install && npm run build
 npm start
 ```
 
