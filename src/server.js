@@ -291,6 +291,87 @@ LAYOUT RULES (CRITICAL — follow these every time):
   );
 
   server.registerTool(
+    "update_elements",
+    {
+      title: "Update Excalidraw elements",
+      description:
+        "Update existing elements on the canvas by ID. Use this to move, resize, restyle, or change text of existing elements instead of deleting and recreating them. Only provide the properties you want to change — all other properties are preserved from the original element.",
+      inputSchema: {
+        updates: z
+          .array(
+            z.object({
+              id: z.string().describe("ID of the element to update"),
+              x: z.number().optional(),
+              y: z.number().optional(),
+              width: z.number().optional(),
+              height: z.number().optional(),
+              strokeColor: z.string().optional(),
+              backgroundColor: z.string().optional(),
+              fillStyle: z
+                .enum(["solid", "hachure", "cross-hatch", "zigzag"])
+                .optional(),
+              strokeWidth: z.number().optional(),
+              strokeStyle: z.enum(["solid", "dashed", "dotted"]).optional(),
+              opacity: z.number().min(0).max(100).optional(),
+              text: z.string().optional(),
+              fontSize: z.number().optional(),
+              points: z.array(z.array(z.number()).length(2)).optional(),
+            })
+          )
+          .min(1)
+          .max(500)
+          .describe("Array of updates with element ID and changed properties"),
+      },
+    },
+    async ({ updates }) => {
+      try {
+        const updatedElements = [];
+        let notFound = 0;
+
+        for (const upd of updates) {
+          const existing = client.getElements().find((el) => el.id === upd.id);
+          if (!existing) {
+            notFound++;
+            continue;
+          }
+
+          const { id, ...changes } = upd;
+
+          // For text elements, also update originalText when text changes
+          if (changes.text !== undefined && existing.type === "text") {
+            changes.originalText = changes.text;
+          }
+
+          const updated = {
+            ...existing,
+            ...changes,
+            version: existing.version + 1,
+            versionNonce: Math.floor(Math.random() * 2147483646),
+            updated: Date.now(),
+          };
+
+          updatedElements.push(updated);
+        }
+
+        if (updatedElements.length > 0) {
+          await client.pushElements(updatedElements);
+        }
+
+        const msg =
+          `Updated ${updatedElements.length} elements.` +
+          (notFound > 0 ? ` ${notFound} not found.` : "");
+
+        return { content: [{ type: "text", text: msg }] };
+      } catch (err) {
+        return {
+          content: [{ type: "text", text: `Update failed: ${err.message}` }],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
     "delete_elements",
     {
       title: "Delete Excalidraw elements",
