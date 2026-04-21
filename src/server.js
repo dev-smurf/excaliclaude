@@ -112,6 +112,8 @@ function createServer() {
                 .object({
                   text: z.string(),
                   fontSize: z.number().optional(),
+                  x: z.number().optional(),
+                  y: z.number().optional(),
                 })
                 .optional(),
             })
@@ -164,7 +166,8 @@ function createServer() {
             built.boundElements = [{ id: labelEl.id, type: "text" }];
             builtElements.push(built, labelEl);
           } else if (el.label && (el.type === "arrow" || el.type === "line")) {
-            // Arrow/line labels: standalone text positioned to avoid overlap
+            // Arrow/line labels: standalone text near the arrow
+            // No auto-routing — Claude decides the points and label placement
             const labelFontSize = el.label.fontSize || 12;
             const labelText = el.label.text;
             const labelLines = labelText.split("\n");
@@ -172,36 +175,26 @@ function createServer() {
             const labelWidth = Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
             const labelHeight = Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
 
-            const points = built.points || [[0, 0]];
-            const lastPt = points[points.length - 1];
-            const dx = lastPt[0];
-            const dy = lastPt[1];
-            const isHorizontal = Math.abs(dx) >= Math.abs(dy);
-            const isVertical = !isHorizontal;
-
-            // For vertical arrows with significant travel (>40px), auto-route
-            // as an L-shape to avoid cutting through content below/above
-            if (isVertical && Math.abs(dy) > 40 && points.length === 2) {
-              const offset = 35;
-              const direction = dx >= 0 ? 1 : -1;
-              const routeX = offset * direction;
-              built.points = [[0, 0], [routeX, 0], [routeX, dy], [0, dy]];
-              built.width = Math.abs(routeX);
-              built.height = Math.abs(dy);
-            }
-
+            // Use explicit label position if provided, otherwise auto-place
             let labelX, labelY;
-            if (isHorizontal) {
-              // Horizontal: label above, centered on midpoint
-              const midX = built.x + dx / 2;
-              labelX = midX - labelWidth / 2;
-              labelY = built.y - labelHeight - 4;
+            if (el.label.x !== undefined && el.label.y !== undefined) {
+              labelX = el.label.x;
+              labelY = el.label.y;
             } else {
-              // Vertical: label to the right of the routed arrow
-              const routeOffset = 35 + 6;
-              const midY = built.y + dy / 2;
-              labelX = built.x + routeOffset;
-              labelY = midY - labelHeight / 2;
+              // Default: place above for horizontal, right for vertical
+              const points = built.points || [[0, 0]];
+              const lastPt = points[points.length - 1];
+              const isHorizontal = Math.abs(lastPt[0]) >= Math.abs(lastPt[1]);
+
+              if (isHorizontal) {
+                const midX = built.x + lastPt[0] / 2;
+                labelX = midX - labelWidth / 2;
+                labelY = built.y - labelHeight - 4;
+              } else {
+                const midY = built.y + lastPt[1] / 2;
+                labelX = built.x + 8;
+                labelY = midY - labelHeight / 2;
+              }
             }
 
             const labelEl = makeElement("text", {
