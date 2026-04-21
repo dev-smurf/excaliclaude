@@ -1,6 +1,6 @@
 {
   "name": "excaliclaude",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server that lets Claude draw in your Excalidraw canvas in real-time via the collaboration protocol",
   "main": "dist/src/server.js",
   "bin": {
@@ -13,7 +13,7 @@
     "prepublishOnly": "npm run build"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "keywords": [
     "excalidraw",
