@@ -1,6 +1,6 @@
 import { io, Socket } from "socket.io-client";
 
-import { encrypt, decrypt } from "./crypto.js";
+import { encrypt, decrypt, clearKeyCache } from "./crypto.js";
 import type {
   BroadcastPayload,
   ClientToServerEvents,
@@ -106,6 +106,7 @@ export class CollabClient {
       this._socket = null;
     }
     this._connected = false;
+    clearKeyCache();
     this._roomId = null;
     this._roomKey = null;
   }
