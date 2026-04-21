@@ -128,7 +128,7 @@ function createServer() {
         for (const el of elements) {
           const built = makeElement(el.type, el);
 
-          if (el.label && ["rectangle", "ellipse", "diamond"].includes(el.type)) {
+          if (el.label && ["rectangle", "ellipse", "diamond", "arrow", "line"].includes(el.type)) {
             const labelFontSize = el.label.fontSize || 16;
             const labelText = el.label.text;
             const labelLines = labelText.split("\n");
@@ -136,15 +136,31 @@ function createServer() {
             const labelWidth = Math.ceil(maxLineLen * labelFontSize * 0.65) + 10;
             const labelHeight = Math.ceil(labelLines.length * labelFontSize * 1.25) + 4;
 
-            // Auto white text on dark backgrounds
+            // Auto white text on dark backgrounds (shapes only)
             const bg = built.backgroundColor || "transparent";
             const isDarkBg = (() => {
+              if (el.type === "arrow" || el.type === "line") return false;
               if (bg === "transparent" || built.fillStyle !== "solid") return false;
               const m = bg.match(/^#([0-9a-f]{2})/i);
               if (!m) return false;
               return parseInt(m[1], 16) < 100;
             })();
             const labelColor = isDarkBg ? "#ffffff" : "#1e1e1e";
+
+            let labelX, labelY;
+            if (el.type === "arrow" || el.type === "line") {
+              // Center label at arrow midpoint
+              const points = built.points || [[0, 0]];
+              const lastPt = points[points.length - 1];
+              const midX = built.x + lastPt[0] / 2;
+              const midY = built.y + lastPt[1] / 2;
+              labelX = midX - labelWidth / 2;
+              labelY = midY - labelHeight / 2;
+            } else {
+              // Center label in shape
+              labelX = built.x + (built.width - labelWidth) / 2;
+              labelY = built.y + (built.height - labelHeight) / 2;
+            }
 
             const labelEl = makeElement("text", {
               text: labelText,
@@ -153,8 +169,8 @@ function createServer() {
               textAlign: "center",
               verticalAlign: "middle",
               containerId: built.id,
-              x: built.x + (built.width - labelWidth) / 2,
-              y: built.y + (built.height - labelHeight) / 2,
+              x: labelX,
+              y: labelY,
               width: labelWidth,
               height: labelHeight,
             });
