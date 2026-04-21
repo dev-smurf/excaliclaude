@@ -86,8 +86,7 @@ LAYOUT RULES (CRITICAL — follow these every time):
 9. STANDALONE TEXT NEAR ARROWS: When placing text elements near arrows manually (not using the label property), position them at least 10px ABOVE horizontal arrows or 12px to the RIGHT of vertical arrows. Never at the same y-coordinate as a horizontal arrow or the same x-coordinate as a vertical arrow — the text will visually overlap the arrow line.
 
 10. NO ELEMENT OVERLAP EVER: Before placing ANY element, verify its bounding box (x, y, width, height) does not intersect with any existing element. If it would overlap, move it to clear space. This applies to text, shapes, arrows — everything.
-
-11. PROGRESSIVE DRAWING: For large diagrams (>20 elements), split into multiple draw_elements calls so the user sees elements appear progressively. Group by logical sections (e.g. title first, then each row of content, then annotations). Each call appears live on the canvas immediately. Do NOT batch everything into a single massive call.`,
+`,
       inputSchema: {
         elements: z
           .array(
