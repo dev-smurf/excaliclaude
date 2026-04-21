@@ -1,0 +1,230 @@
+/**
+ * Integration tests for the HTTP/SSE MCP server (src/http.ts).
+ *
+ * Each describe block spins up a real HTTP server on a random free port,
+ * sends actual HTTP requests, and verifies behaviour. All servers are torn
+ * down in after() hooks to avoid resource leaks.
+ */
+
+import { describe, test, before, after } from "node:test";
+import assert from "node:assert/strict";
+import { createServer as createNetServer } from "node:net";
+
+import { createHttpMcpServer } from "../src/http.js";
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Find a free TCP port by binding to :0 and reading the assigned port. */
+function getFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createNetServer();
+    server.listen(0, () => {
+      const addr = server.address();
+      server.close(() => {
+        if (addr && typeof addr === "object") {
+          resolve(addr.port);
+        } else {
+          reject(new Error("Could not determine free port"));
+        }
+      });
+    });
+  });
+}
+
+/** POST JSON to a URL and return the Response (body stream not consumed). */
+function postJson(url: string, body: unknown, headers?: Record<string, string>): Promise<Response> {
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...headers },
+    body: JSON.stringify(body),
+  });
+}
+
+/** A minimal valid MCP initialize payload. */
+const INIT_PAYLOAD = {
+  jsonrpc: "2.0",
+  id: 1,
+  method: "initialize",
+  params: {
+    protocolVersion: "2024-11-05",
+    capabilities: {},
+    clientInfo: { name: "test-client", version: "0.0.0" },
+  },
+};
+
+// ── No authentication ─────────────────────────────────────────────────────────
+
+describe("HTTP server — no authentication", () => {
+  let baseUrl: string;
+  let close: () => Promise<void>;
+
+  before(async () => {
+    const port = await getFreePort();
+    ({ close } = await createHttpMcpServer({ port }));
+    baseUrl = `http://localhost:${port}`;
+  });
+
+  after(async () => {
+    await close();
+  });
+
+  test("accepts POST without Authorization header", async () => {
+    const res = await postJson(baseUrl, INIT_PAYLOAD);
+    await res.body?.cancel();
+    assert.notEqual(res.status, 401, "expected non-401 when no token is configured");
+  });
+
+  test("accepts GET without Authorization header", async () => {
+    const res = await fetch(baseUrl);
+    await res.body?.cancel();
+    assert.notEqual(res.status, 401);
+  });
+});
+
+// ── With authentication ───────────────────────────────────────────────────────
+
+describe("HTTP server — with authentication", () => {
+  const TOKEN = "test-secret-token-abc123";
+  let baseUrl: string;
+  let close: () => Promise<void>;
+
+  before(async () => {
+    const port = await getFreePort();
+    ({ close } = await createHttpMcpServer({ port, token: TOKEN }));
+    baseUrl = `http://localhost:${port}`;
+  });
+
+  after(async () => {
+    await close();
+  });
+
+  test("rejects POST with no Authorization header (401)", async () => {
+    const res = await postJson(baseUrl, INIT_PAYLOAD);
+    assert.equal(res.status, 401);
+  });
+
+  test("rejects POST with wrong token (401)", async () => {
+    const res = await postJson(baseUrl, INIT_PAYLOAD, {
+      Authorization: "Bearer wrong-token",
+    });
+    assert.equal(res.status, 401);
+  });
+
+  test("rejects POST with non-Bearer scheme (401)", async () => {
+    const res = await postJson(baseUrl, INIT_PAYLOAD, {
+      Authorization: `Basic ${TOKEN}`,
+    });
+    assert.equal(res.status, 401);
+  });
+
+  test("rejects GET with no Authorization header (401)", async () => {
+    const res = await fetch(baseUrl);
+    await res.body?.cancel();
+    assert.equal(res.status, 401);
+  });
+
+  test("rejects GET with wrong token (401)", async () => {
+    const res = await fetch(baseUrl, {
+      headers: { Authorization: "Bearer wrong-token" },
+    });
+    await res.body?.cancel();
+    assert.equal(res.status, 401);
+  });
+
+  test("401 response body is JSON with error field", async () => {
+    const res = await postJson(baseUrl, INIT_PAYLOAD);
+    const body = (await res.json()) as { error: string };
+    assert.equal(body.error, "Unauthorized");
+  });
+
+  test("allows POST with correct Bearer token (non-401)", async () => {
+    const res = await postJson(baseUrl, INIT_PAYLOAD, {
+      Authorization: `Bearer ${TOKEN}`,
+    });
+    await res.body?.cancel();
+    assert.notEqual(res.status, 401, "correct token should not be rejected");
+  });
+
+  test("allows GET with correct Bearer token (non-401)", async () => {
+    const res = await fetch(baseUrl, {
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    });
+    await res.body?.cancel();
+    assert.notEqual(res.status, 401);
+  });
+
+  test("initialize with correct token reaches the transport (not 401)", async () => {
+    // The transport may return 200 or another status depending on its internal state,
+    // but it must not return 401 — that would mean auth blocked the request.
+    const res = await postJson(baseUrl, INIT_PAYLOAD, {
+      Authorization: `Bearer ${TOKEN}`,
+    });
+    await res.body?.cancel();
+    assert.notEqual(res.status, 401, "transport should have received the request (auth passed)");
+  });
+});
+
+// ── Startup behaviour ─────────────────────────────────────────────────────────
+
+describe("HTTP server — startup", () => {
+  test("listens on the requested port", async () => {
+    const port = await getFreePort();
+    const { close } = await createHttpMcpServer({ port });
+    try {
+      const res = await fetch(`http://localhost:${port}`);
+      await res.body?.cancel();
+      // Any response (even 4xx from transport) means the server is up.
+      assert.ok(res.status > 0, "server should respond");
+    } finally {
+      await close();
+    }
+  });
+
+  test("rejects an invalid port with a thrown error", async () => {
+    // Port 1 is privileged on most systems — bind will fail.
+    // We just need createHttpMcpServer to reject, not hang.
+    // Use port 0 as a placeholder; the real guard is in the CLI.
+    // Instead test that a port already in use throws.
+    const port = await getFreePort();
+
+    // Occupy the port first.
+    const blocker = await createHttpMcpServer({ port });
+    try {
+      await assert.rejects(
+        () => createHttpMcpServer({ port }),
+        /EADDRINUSE/,
+        "should throw EADDRINUSE when port is taken"
+      );
+    } finally {
+      await blocker.close();
+    }
+  });
+
+  test("close() resolves cleanly with no open connections", async () => {
+    const port = await getFreePort();
+    const { close } = await createHttpMcpServer({ port });
+    await assert.doesNotReject(close, "close() should resolve without error");
+  });
+
+  test("close() resolves cleanly with an open SSE connection", async () => {
+    const port = await getFreePort();
+    const { close } = await createHttpMcpServer({ port });
+
+    // Open an SSE stream (GET request that stays open).
+    const controller = new AbortController();
+    fetch(`http://localhost:${port}`, { signal: controller.signal }).catch(
+      () => {}
+    );
+
+    // Give the request a moment to reach the server.
+    await new Promise((r) => setTimeout(r, 50));
+
+    // close() must resolve even with the open SSE stream.
+    await assert.doesNotReject(
+      () => close(),
+      "close() should force-close open SSE connections and resolve"
+    );
+
+    controller.abort();
+  });
+});

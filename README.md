@@ -61,6 +61,68 @@ claude mcp add -s user excaliclaude -- npx -y excaliclaude
 
 <br>
 
+### <img src="https://img.shields.io/badge/Claude.ai-E07C4C?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude.ai"> &nbsp; via tunnel (ngrok, Cloudflare, etc.)
+
+Run the server locally, expose it through a tunnel, add the URL to Claude.ai.
+
+**1. Start the server**
+
+```bash
+# With auth (recommended when using a tunnel)
+EXCALICLAUDE_TOKEN=your-secret npx excaliclaude serve
+
+# Or pass the token directly
+npx excaliclaude serve --token your-secret --port 3000
+```
+
+**2. Open a tunnel**
+
+```bash
+# ngrok (free tier works fine)
+ngrok http 3000
+# → https://abc123.ngrok-free.app
+```
+
+> Cloudflare Tunnel, bore.pub, or any other HTTP tunnel also works.
+
+**3. Add to Claude.ai**
+
+Go to **Settings → Integrations → Add MCP server** and paste the tunnel URL.
+
+If you set a token, add it as a Bearer header in the Claude.ai integration settings.
+
+<details>
+<summary><strong>Token configuration</strong></summary>
+
+The token can be set three ways (CLI flag takes precedence):
+
+```bash
+# 1. CLI flag
+npx excaliclaude serve --token my-secret
+
+# 2. Environment variable
+export EXCALICLAUDE_TOKEN=my-secret
+npx excaliclaude serve
+
+# 3. No token — only safe without a public tunnel
+npx excaliclaude serve
+```
+
+Without a token, anyone who discovers the tunnel URL can call your tools. Always set a token when using a public tunnel.
+
+</details>
+
+<details>
+<summary><strong>Custom port</strong></summary>
+
+```bash
+npx excaliclaude serve --port 8080
+```
+
+</details>
+
+<br>
+
 ### <img src="https://img.shields.io/badge/Cursor-000?style=for-the-badge&logo=cursor&logoColor=white" alt="Cursor"> &nbsp; <img src="https://img.shields.io/badge/Windsurf-0057FF?style=for-the-badge&logo=codeium&logoColor=white" alt="Windsurf"> &nbsp; <img src="https://img.shields.io/badge/Other-555?style=for-the-badge" alt="Other">
 
 ```json
@@ -154,9 +216,12 @@ Claude: Connected to room abc12345... (2 users in room)
 ## Architecture
 
 ```
-bin/excaliclaude.ts         CLI entry point (stdio transport)
+bin/excaliclaude.ts         CLI entry point
+       |                     ├─ stdio transport  → Claude Code
+       |                     └─ HTTP/SSE transport → Claude.ai (via tunnel)
        |
-src/server.ts               MCP server with 6 tools
+src/server.ts               MCP server with 9 tools
+src/http.ts                 HTTP server factory (StreamableHTTP + Bearer auth)
        |
 src/collab.ts               Socket.io connection + room management + element cache
        |
@@ -187,7 +252,7 @@ src/collab.ts               Socket.io connection + room management + element cac
   <br>
   <img src="assets/claude-jumping.svg" alt="Claude Code" width="60" height="50">
   <br><br>
-  <sub>Built for <a href="https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview">Claude Code</a></sub>
+  <sub>Built for <a href="https://docs.anthropic.com/en/docs/agents-and-tools/claude-code/overview">Claude Code</a> and <a href="https://claude.ai">Claude.ai</a></sub>
   <br>
   <sub>by <a href="https://github.com/dev-smurf">@dev-smurf</a></sub>
 </p>
