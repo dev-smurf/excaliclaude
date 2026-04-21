@@ -121,4 +121,36 @@ describe("CollabClient", () => {
     (client as any)._socket = null;
     assert.equal(client.isConnected(), false);
   });
+
+  it("getElementById returns element by ID", () => {
+    const el = makeElement("rectangle", { id: "r1" });
+    client._elements.set("r1", el);
+    assert.equal(client.getElementById("r1")?.id, "r1");
+  });
+
+  it("getElementById returns undefined for deleted elements", () => {
+    client._elements.set("r2", {
+      ...makeElement("rectangle", { id: "r2" }),
+      isDeleted: true,
+    });
+    assert.equal(client.getElementById("r2"), undefined);
+  });
+
+  it("getElementById returns undefined for unknown ID", () => {
+    assert.equal(client.getElementById("nope"), undefined);
+  });
+
+  it("elementCount counts only non-deleted elements", () => {
+    client._elements.set("a", makeElement("rectangle", { id: "a" }));
+    client._elements.set("b", makeElement("rectangle", { id: "b" }));
+    client._elements.set("c", {
+      ...makeElement("rectangle", { id: "c" }),
+      isDeleted: true,
+    });
+    assert.equal(client.elementCount(), 2);
+  });
+
+  it("elementCount returns 0 when empty", () => {
+    assert.equal(client.elementCount(), 0);
+  });
 });
