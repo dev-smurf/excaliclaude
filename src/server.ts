@@ -99,8 +99,10 @@ export function createServer(existingClient?: CollabClient): { server: McpServer
       title: "Draw on Excalidraw",
       description: `Draw elements on the connected Excalidraw canvas. Supports rectangle, ellipse, diamond, text, arrow, line, frame, image.
 
-DESIGN PRINCIPLES:
-- Use rectangles with solid fills as containers for sections, cards, and groups. Combine shapes + text for visual hierarchy — don't use text alone.
+CRITICAL — ALWAYS USE RECTANGLES:
+- Every card, section, or group MUST be a rectangle element with width and height — NEVER use standalone text as a container.
+- To make a labeled box: draw a rectangle, then use the "label" property to put text inside it, OR draw a separate text element positioned inside.
+- Standalone text (without a surrounding rectangle) should only be used for titles and annotations, not for cards or content blocks.
 - Use frames to group related sections of a layout.
 
 LAYOUT RULES (CRITICAL — follow these every time):
