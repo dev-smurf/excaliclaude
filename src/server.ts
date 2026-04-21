@@ -81,7 +81,11 @@ LAYOUT RULES (CRITICAL — follow these every time):
 
 7. RESPONSIVE ROUTING: If the best path for an arrow would overlap content, consider: (a) routing the arrow with extra waypoints, (b) repositioning the annotation text, or (c) adding more spacing. Choose whichever produces the cleanest result.
 
-8. TEXT DIMENSIONS: Text elements need width/height for proper rendering. The server estimates these, but keep text concise to avoid overflow. Multi-line text uses \\n.`,
+8. TEXT DIMENSIONS: Text elements need width/height for proper rendering. The server estimates these, but keep text concise to avoid overflow. Multi-line text uses \\n.
+
+9. STANDALONE TEXT NEAR ARROWS: When placing text elements near arrows manually (not using the label property), position them at least 10px ABOVE horizontal arrows or 12px to the RIGHT of vertical arrows. Never at the same y-coordinate as a horizontal arrow or the same x-coordinate as a vertical arrow — the text will visually overlap the arrow line.
+
+10. NO ELEMENT OVERLAP EVER: Before placing ANY element, verify its bounding box (x, y, width, height) does not intersect with any existing element. If it would overlap, move it to clear space. This applies to text, shapes, arrows — everything.`,
       inputSchema: {
         elements: z
           .array(
@@ -240,10 +244,10 @@ LAYOUT RULES (CRITICAL — follow these every time):
               if (isHorizontal) {
                 const midX = built.x + lastPt[0] / 2;
                 labelX = midX - labelWidth / 2;
-                labelY = built.y - labelHeight - 4;
+                labelY = built.y - labelHeight - 10;
               } else {
                 const midY = built.y + lastPt[1] / 2;
-                labelX = built.x + 8;
+                labelX = built.x + 12;
                 labelY = midY - labelHeight / 2;
               }
             }
