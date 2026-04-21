@@ -21,6 +21,7 @@ export class CollabClient {
   /** @internal Exposed for testing only */
   _elements: Map<string, ExcalidrawElement> = new Map();
   private _connected = false;
+  private _history: string[][] = [];
 
   isConnected(): boolean {
     return this._connected && this._socket?.connected === true;
@@ -141,6 +142,20 @@ export class CollabClient {
     for (const el of elements) {
       this._elements.set(el.id, el);
     }
+
+    // Track non-deleted element IDs for undo
+    const newIds = elements.filter((el) => !el.isDeleted).map((el) => el.id);
+    if (newIds.length > 0) {
+      this._history.push(newIds);
+    }
+  }
+
+  async undoLastDraw(): Promise<number> {
+    this._assertConnected();
+    const lastIds = this._history.pop();
+    if (!lastIds || lastIds.length === 0) return 0;
+    await this.deleteElements(lastIds);
+    return lastIds.length;
   }
 
   getElements(): ExcalidrawElement[] {

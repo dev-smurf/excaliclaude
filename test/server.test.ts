@@ -20,6 +20,11 @@ function mockConnected(client: CollabClient): void {
     for (const el of elements) {
       this._elements.set(el.id, el);
     }
+    // Track history for undo support (mirrors real pushElements)
+    const newIds = elements.filter((el) => !el.isDeleted).map((el) => el.id);
+    if (newIds.length > 0) {
+      (this as any)._history.push(newIds);
+    }
   };
 }
 
@@ -382,6 +387,56 @@ describe("label centering in shapes", () => {
     assert.ok(label.x < rect.x + rect.width);
     assert.ok(label.y > rect.y);
     assert.ok(label.y < rect.y + rect.height);
+  });
+});
+
+describe("undo_last_draw handler", () => {
+  it("undoes the last draw", async () => {
+    const { server, client } = createServer();
+    mockConnected(client);
+    const draw = (server as any)._registeredTools.draw_elements;
+    const undo = (server as any)._registeredTools.undo_last_draw;
+
+    await draw.handler({
+      elements: [{ type: "rectangle", x: 0, y: 0, width: 50, height: 50 }],
+    });
+    assert.equal(client.elementCount(), 1);
+
+    const result = await undo.handler({});
+    assert.ok(result.content[0].text.includes("Undone"));
+    assert.equal(client.elementCount(), 0);
+  });
+
+  it("returns nothing to undo when history is empty", async () => {
+    const { server, client } = createServer();
+    mockConnected(client);
+    const undo = (server as any)._registeredTools.undo_last_draw;
+    const result = await undo.handler({});
+    assert.ok(result.content[0].text.includes("Nothing to undo"));
+  });
+
+  it("undoes multiple draws in reverse order", async () => {
+    const { server, client } = createServer();
+    mockConnected(client);
+    const draw = (server as any)._registeredTools.draw_elements;
+    const undo = (server as any)._registeredTools.undo_last_draw;
+
+    await draw.handler({
+      elements: [{ type: "rectangle", x: 0, y: 0, width: 50, height: 50 }],
+    });
+    await draw.handler({
+      elements: [
+        { type: "rectangle", x: 100, y: 0, width: 50, height: 50 },
+        { type: "rectangle", x: 200, y: 0, width: 50, height: 50 },
+      ],
+    });
+    assert.equal(client.elementCount(), 3);
+
+    await undo.handler({});
+    assert.equal(client.elementCount(), 1);
+
+    await undo.handler({});
+    assert.equal(client.elementCount(), 0);
   });
 });
 

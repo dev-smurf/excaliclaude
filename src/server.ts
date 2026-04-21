@@ -416,6 +416,46 @@ LAYOUT RULES (CRITICAL — follow these every time):
   );
 
   server.registerTool(
+    "undo_last_draw",
+    {
+      title: "Undo last draw",
+      description:
+        "Undo the last draw_elements call by deleting all elements it created. Can be called multiple times to undo further back. Does not undo update_elements or delete_elements.",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const count = await client.undoLastDraw();
+        if (count === 0) {
+          return {
+            content: [
+              { type: "text" as const, text: "Nothing to undo." },
+            ],
+          };
+        }
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Undone: removed ${count} elements from the last draw.`,
+            },
+          ],
+        };
+      } catch (err) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `Undo failed: ${(err as Error).message}`,
+            },
+          ],
+          isError: true,
+        };
+      }
+    }
+  );
+
+  server.registerTool(
     "status",
     {
       title: "Connection status",
