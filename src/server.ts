@@ -99,6 +99,10 @@ export function createServer(existingClient?: CollabClient): { server: McpServer
       title: "Draw on Excalidraw",
       description: `Draw elements on the connected Excalidraw canvas. Supports rectangle, ellipse, diamond, text, arrow, line, frame, image.
 
+DESIGN PRINCIPLES:
+- Use rectangles with solid fills as containers for sections, cards, and groups. Combine shapes + text for visual hierarchy — don't use text alone.
+- Use frames to group related sections of a layout.
+
 LAYOUT RULES (CRITICAL — follow these every time):
 
 1. PLAN BEFORE DRAWING: Before calling this tool, mentally map out the full layout. Calculate positions for every element, annotation, and arrow FIRST. Never place elements without considering the full picture.
