@@ -42,12 +42,26 @@ function makeElement(type, props) {
   if (type === "text") {
     const text = props.text || "";
     const fontSize = props.fontSize || 20;
+    const fontFamily = props.fontFamily || 5;
     const lineHeight = props.lineHeight || 1.25;
     const lines = text.split("\n");
     const maxLineLen = Math.max(...lines.map((l) => l.length));
-    const estimatedWidth = props.width || Math.ceil(maxLineLen * fontSize * 0.55);
+
+    // Per-font character width multipliers (measured from Excalidraw)
+    // Excalifont(5)/Virgil(1) are wide hand-drawn fonts
+    // Helvetica(2)/Liberation Sans(9) are standard
+    // Cascadia(3) is monospace
+    const charWidthMultiplier =
+      fontFamily === 2 || fontFamily === 9
+        ? 0.55
+        : fontFamily === 3
+          ? 0.6
+          : 0.65;
+
+    const estimatedWidth =
+      props.width || Math.ceil(maxLineLen * fontSize * charWidthMultiplier) + 10;
     const estimatedHeight =
-      props.height || Math.ceil(lines.length * fontSize * lineHeight);
+      props.height || Math.ceil(lines.length * fontSize * lineHeight) + 4;
 
     return {
       ...base,
@@ -56,7 +70,7 @@ function makeElement(type, props) {
       text,
       originalText: text,
       fontSize,
-      fontFamily: props.fontFamily || 5,
+      fontFamily,
       textAlign: props.textAlign || "left",
       verticalAlign: props.verticalAlign || "top",
       lineHeight,
