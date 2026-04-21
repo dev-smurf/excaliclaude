@@ -40,15 +40,26 @@ function makeElement(type, props) {
   };
 
   if (type === "text") {
+    const text = props.text || "";
+    const fontSize = props.fontSize || 20;
+    const lineHeight = props.lineHeight || 1.25;
+    const lines = text.split("\n");
+    const maxLineLen = Math.max(...lines.map((l) => l.length));
+    const estimatedWidth = props.width || Math.ceil(maxLineLen * fontSize * 0.55);
+    const estimatedHeight =
+      props.height || Math.ceil(lines.length * fontSize * lineHeight);
+
     return {
       ...base,
-      text: props.text || "",
-      originalText: props.text || "",
-      fontSize: props.fontSize || 20,
+      width: estimatedWidth,
+      height: estimatedHeight,
+      text,
+      originalText: text,
+      fontSize,
       fontFamily: props.fontFamily || 5,
       textAlign: props.textAlign || "left",
       verticalAlign: props.verticalAlign || "top",
-      lineHeight: props.lineHeight || 1.25,
+      lineHeight,
       autoResize: true,
       containerId: props.containerId || null,
     };
