@@ -65,6 +65,8 @@ export function buildShapeLabel(
     ? "#ffffff"
     : "#1e1e1e";
 
+  // Use the container's width so textAlign: "center" works correctly
+  // regardless of text width estimation accuracy
   const labelEl = makeElement("text", {
     text: label.text,
     fontSize,
@@ -72,9 +74,9 @@ export function buildShapeLabel(
     textAlign: "center",
     verticalAlign: "middle",
     containerId: shape.id,
-    x: shape.x + (shape.width - width) / 2,
+    x: shape.x,
     y: shape.y + (shape.height - height) / 2,
-    width,
+    width: shape.width,
     height,
   });
 

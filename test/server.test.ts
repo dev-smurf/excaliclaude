@@ -424,9 +424,10 @@ describe("label centering in shapes", () => {
     assert.ok(
       rect.boundElements?.some((b) => b.id === label.id && b.type === "text")
     );
-    assert.ok(label.x > rect.x);
-    assert.ok(label.x < rect.x + rect.width);
-    assert.ok(label.y > rect.y);
+    // Label uses container's full width for proper centering via textAlign
+    assert.equal(label.x, rect.x);
+    assert.equal(label.width, rect.width);
+    assert.ok(label.y >= rect.y);
     assert.ok(label.y < rect.y + rect.height);
   });
 });

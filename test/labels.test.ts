@@ -114,8 +114,9 @@ describe("buildShapeLabel", () => {
     });
     const label = buildShapeLabel(shape, { text: "Hi" });
 
-    assert.ok(label.x > shape.x);
-    assert.ok(label.x < shape.x + shape.width);
+    // Label uses full container width for proper textAlign: "center"
+    assert.equal(label.x, shape.x);
+    assert.equal(label.width, shape.width);
     assert.ok(label.y > shape.y);
     assert.ok(label.y < shape.y + shape.height);
   });

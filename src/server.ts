@@ -99,7 +99,8 @@ LAYOUT RULES (CRITICAL — follow these every time):
 9. STANDALONE TEXT NEAR ARROWS: When placing text elements near arrows manually (not using the label property), position them at least 10px ABOVE horizontal arrows or 12px to the RIGHT of vertical arrows. Never at the same y-coordinate as a horizontal arrow or the same x-coordinate as a vertical arrow — the text will visually overlap the arrow line.
 
 10. NO ELEMENT OVERLAP EVER: Before placing ANY element, verify its bounding box (x, y, width, height) does not intersect with any existing element. If it would overlap, move it to clear space. This applies to text, shapes, arrows — everything.
-`,
+
+11. CENTER TEXT PROPERLY: For annotation text below shapes (titles, descriptions), ALWAYS use textAlign: "center" and set width equal to the shape's width and x equal to the shape's x. This ensures Excalidraw centers the text visually regardless of width estimation. For standalone text inside phone mockups or UI elements, also use textAlign: "center". Never rely on manual x-offset calculations for centering — use textAlign instead.`,
       inputSchema: {
         elements: z
           .array(
