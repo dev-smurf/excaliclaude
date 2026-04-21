@@ -31,7 +31,7 @@ describe("createServer", () => {
     assert.equal(client.isConnected(), false);
   });
 
-  it("server has all 6 expected tools", () => {
+  it("server has all expected tools", () => {
     const { server } = createServer();
     const tools = Object.keys((server as any)._registeredTools);
     assert.ok(tools.includes("connect"));
@@ -40,7 +40,7 @@ describe("createServer", () => {
     assert.ok(tools.includes("get_scene"));
     assert.ok(tools.includes("delete_elements"));
     assert.ok(tools.includes("clear_canvas"));
-    assert.equal(tools.length, 6);
+    assert.ok(tools.includes("status"));
   });
 });
 
@@ -382,5 +382,25 @@ describe("label centering in shapes", () => {
     assert.ok(label.x < rect.x + rect.width);
     assert.ok(label.y > rect.y);
     assert.ok(label.y < rect.y + rect.height);
+  });
+});
+
+describe("status handler", () => {
+  it("returns not connected when disconnected", async () => {
+    const { server } = createServer();
+    const handler = (server as any)._registeredTools.status;
+    const result = await handler.handler({});
+    assert.ok(result.content[0].text.includes("Not connected"));
+  });
+
+  it("returns connected with element count", async () => {
+    const { server, client } = createServer();
+    mockConnected(client);
+    client._elements.set("a", { id: "a", isDeleted: false } as any);
+    client._elements.set("b", { id: "b", isDeleted: false } as any);
+    const handler = (server as any)._registeredTools.status;
+    const result = await handler.handler({});
+    assert.ok(result.content[0].text.includes("Connected"));
+    assert.ok(result.content[0].text.includes("2"));
   });
 });

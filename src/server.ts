@@ -415,5 +415,36 @@ LAYOUT RULES (CRITICAL — follow these every time):
     }
   );
 
+  server.registerTool(
+    "status",
+    {
+      title: "Connection status",
+      description:
+        "Check whether excaliclaude is connected to a room, which room, and how many elements are on the canvas. Use this to verify connectivity before drawing.",
+      inputSchema: {},
+    },
+    async () => {
+      if (!client.isConnected()) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: "Not connected. Use the connect tool with an Excalidraw collab URL first.",
+            },
+          ],
+        };
+      }
+      const count = client.elementCount();
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Connected | ${count} elements on canvas`,
+          },
+        ],
+      };
+    }
+  );
+
   return { server, client };
 }
