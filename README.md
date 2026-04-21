@@ -19,31 +19,19 @@
 
 <br>
 
-<p align="center">
-  <img src="https://img.shields.io/badge/1-Open_Excalidraw_+_start_collab-4A90D9?style=flat-square" alt="Step 1">&nbsp;&nbsp;>&nbsp;&nbsp;<img src="https://img.shields.io/badge/2-Give_the_link_to_Claude-E07C4C?style=flat-square" alt="Step 2">&nbsp;&nbsp;>&nbsp;&nbsp;<img src="https://img.shields.io/badge/3-Watch_it_draw_live-2D7D46?style=flat-square" alt="Step 3">
-</p>
-
-<br>
-
 ---
 
 <br>
 
 ## How it works
 
-```
-┌─────────┐          ┌──────────────────┐          ┌─────────────────┐
-│         │  prompt   │                  │ socket.io │                 │
-│   You   │ -------> │   excaliclaude   │ -------> │   Excalidraw    │
-│         │          │   (MCP server)   │ AES-128  │   (your browser)│
-└─────────┘          └──────────────────┘          └─────────────────┘
-                                                          │
-                            shapes appear live! ◄─────────┘
-```
+<p align="center">
+  <strong>Open Excalidraw</strong> &nbsp;→&nbsp; <strong>Start collab</strong> &nbsp;→&nbsp; <strong>Give link to Claude</strong> &nbsp;→&nbsp; <strong>Shapes appear live</strong>
+</p>
 
-> [!TIP]
-> No browser extension. No DevTools. No API key needed from Excalidraw.
-> Just the native collaboration protocol.
+<br>
+
+Claude connects to the Excalidraw collaboration server using the native protocol (socket.io + AES-128-GCM encryption). No browser extension. No DevTools. No Excalidraw API key. Just the same protocol your browser uses when you collaborate with someone.
 
 <br>
 
@@ -59,13 +47,7 @@ npm install -g excaliclaude
 
 <br>
 
-<table>
-<tr>
-<td width="50%">
-
-### <img src="https://img.shields.io/badge/-Claude_Code-E07C4C?style=flat-square" alt="Claude Code"> &nbsp;(recommended)
-
-Add to `~/.claude.json`:
+**Claude Code** — add to `~/.claude.json`:
 
 ```json
 {
@@ -77,10 +59,7 @@ Add to `~/.claude.json`:
 }
 ```
 
-</td>
-<td width="50%">
-
-### <img src="https://img.shields.io/badge/-Cursor_/_Windsurf_/_Other-555?style=flat-square" alt="Other">
+**Cursor / Windsurf / Other MCP clients:**
 
 ```json
 {
@@ -92,10 +71,6 @@ Add to `~/.claude.json`:
   }
 }
 ```
-
-</td>
-</tr>
-</table>
 
 <details>
 <summary><strong>Run from source</strong></summary>
@@ -140,8 +115,8 @@ You:    Connect to https://excalidraw.com/#room=abc,key123
         and draw a system architecture with a load balancer,
         3 API servers, and a database.
 
-Claude: ✓ Connected to room abc12345... (2 users in room)
-        ✓ Drawing 9 elements...
+Claude: Connected to room abc12345... (2 users in room)
+        Drawing 9 elements...
 
         *rectangles, arrows, and labels appear live in your browser*
 ```
@@ -173,15 +148,15 @@ Claude: ✓ Connected to room abc12345... (2 users in room)
 ## Architecture
 
 ```
-bin/excaliclaude.js         ← CLI entry point (stdio transport)
-       │
-src/server.js               ← MCP server with 5 tools
-       │
-src/collab.js               ← Socket.io connection + room management + element cache
-       │
-       ├── src/crypto.js    ← AES-128-GCM encrypt/decrypt (WebCrypto API)
-       ├── src/elements.js  ← Element factory with Excalidraw defaults
-       └── src/url.js       ← Parse collab URLs → { roomId, roomKey }
+bin/excaliclaude.js         CLI entry point (stdio transport)
+       |
+src/server.js               MCP server with 5 tools
+       |
+src/collab.js               Socket.io connection + room management + element cache
+       |
+       |-- src/crypto.js    AES-128-GCM encrypt/decrypt (WebCrypto API)
+       |-- src/elements.js  Element factory with Excalidraw defaults
+       |-- src/url.js       Parse collab URLs into roomId + roomKey
 ```
 
 <br>
