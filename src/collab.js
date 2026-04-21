@@ -36,6 +36,9 @@ class CollabClient {
       this._socket = io(COLLAB_SERVER, {
         transports: ["websocket"],
         timeout: CONNECT_TIMEOUT,
+        extraHeaders: {
+          Origin: "https://excalidraw.com",
+        },
       });
 
       this._socket.on("connect_error", (err) => {
